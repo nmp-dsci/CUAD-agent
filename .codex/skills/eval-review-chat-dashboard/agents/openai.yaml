@@ -1,0 +1,4 @@
+interface:
+  display_name: "Eval Review Chat Dashboard"
+  short_description: "WhatsApp-style dashboard for reviewing evals, gold answers, and predictions"
+  default_prompt: "Help me build a static WhatsApp-style evaluation review dashboard where each conversation/document/question shows inputs, predictions, golden answers, scores, failure modes, and summary metrics."

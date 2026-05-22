@@ -1,0 +1,40 @@
+[project]
+name = "cuad"
+version = "0.1.0"
+description = "Add your description here"
+readme = "readme.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "dspy>=3.2.1",
+    "langchain-deepseek>=1.0.1",
+    "langchain-text-splitters>=1.1.2",
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "pydantic-ai-slim[openai]>=1.66.0",
+    "pytest>=9.0.3",
+    "python-dotenv>=1.2.2",
+    "requests>=2.33.1",
+    "scikit-learn>=1.8.0",
+    "torch>=2.11.0",
+    "tqdm>=4.67.3",
+    "transformers>=5.7.0",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+environments = ["sys_platform != 'win32'"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+cuad-explore = "cuad_agent.cli.explore:main"
+cuad-eval-dspy = "cuad_agent.cli.dspy_eval:main"
+cuad-eval-langchain = "cuad_agent.cli.langchain_eval:main"
+cuad-agent = "cuad_agent.cli.langchain_eval:main"
+cuad-improve-prompts = "cuad_agent.cli.prompt_improve:main"
+cuad-eval-rag = "cuad_agent.rag.cli:main"
+cuad-compare-runs = "cuad_agent.cli.compare_runs:main"

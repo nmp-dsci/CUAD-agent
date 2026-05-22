@@ -1,0 +1,1 @@
+"""Static review dashboard renderers."""

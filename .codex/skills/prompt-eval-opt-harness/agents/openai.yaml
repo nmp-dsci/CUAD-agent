@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prompt Eval Opt Harness"
+  short_description: "Improve system prompts from eval results and golden answers"
+  default_prompt: "Help me build a prompt-eval optimization harness that improves my system prompts from evaluation results and golden answers, using disjoint generator/evaluator/holdout failure splits."
