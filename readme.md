@@ -18,6 +18,37 @@ Supported full-agent context modes are `raw`, `rag-dense`, `rag-hybrid`,
 
 ---
 
+## Evaluation
+
+The latest all-context evaluation used `deepseek/deepseek-v4-flash` with
+`prompts/system_prompts_v2.py` on the deterministic 50-contract, seed-42 sample
+for 2,050 total contract/question examples. Each version below changes only the
+context supplied to the same legal-review agent:
+
+| Version | Description |
+|---|---|
+| `v1 baseline` | Earlier DeepSeek run with the original prompt set; included as the comparison baseline in saved summaries. |
+| `eval-raw` | V2 prompts with the full contract transcript as context. |
+| `eval-rag-dense` | V2 prompts with dense sentence retrieval, using the top-30 retrieved chunks. |
+| `eval-rag-hybrid` | V2 prompts with reciprocal-rank fusion over BM25 and dense sentence retrieval, using top-30 chunks. |
+| `eval-rag-hierarchical-bm25` | V2 prompts with BM25 leaf-sentence retrieval, top-section expansion, then reranking. |
+| `eval-rag-hierarchical-dense` | V2 prompts with dense leaf-sentence retrieval, top-section expansion, then reranking. |
+
+| Run | Mean token F1 | Correct at 0.5 | F1 delta vs v1 | Correct delta vs v1 |
+|---|---:|---:|---:|---:|
+| `v1 baseline` | 40.03% | 39.85% | - | - |
+| `eval-raw` | 83.65% | 85.07% | +43.62 pts | +45.22 pts |
+| `eval-rag-dense` | 79.52% | 80.05% | +39.49 pts | +40.20 pts |
+| `eval-rag-hybrid` | 78.32% | 78.93% | +38.29 pts | +39.07 pts |
+| `eval-rag-hierarchical-bm25` | 76.34% | 76.49% | +36.31 pts | +36.63 pts |
+| `eval-rag-hierarchical-dense` | 79.88% | 80.29% | +39.85 pts | +40.44 pts |
+
+The strongest run in this set is `eval-raw`: the V2 prompt set with full-contract
+context. Among RAG modes, `eval-rag-hierarchical-dense` performs best, slightly
+ahead of flat dense retrieval.
+
+---
+
 ## Setup
 
 ### 1. Install dependencies
