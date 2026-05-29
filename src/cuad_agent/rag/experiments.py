@@ -254,6 +254,38 @@ def load_or_build_legal_recursive_cache(
     }
 
 
+def build_legal_recursive_documents(
+    legal_recursive_chunks: list[RagChunk],
+    contracts: dict[int, ContractDocument],
+    review_document_ids: set[int],
+) -> dict[str, dict[str, Any]]:
+    by_doc = chunks_by_document(legal_recursive_chunks)
+    documents: dict[str, dict[str, Any]] = {}
+    for document_row_id in sorted(review_document_ids):
+        contract = contracts.get(
+            document_row_id,
+            ContractDocument(document_row_id=document_row_id, title=str(document_row_id), text=""),
+        )
+        documents[str(document_row_id)] = {
+            "document_row_id": document_row_id,
+            "title": contract.title,
+            "raw_text": contract.text,
+            "sentences": [
+                {
+                    "sentence_id": chunk.chunk_id,
+                    "sentence_index": index,
+                    "raw_text": chunk.text,
+                    "contained_sentence_ids": chunk.sentence_ids,
+                    "section_number": chunk.section_number or "",
+                    "section_title": chunk.section_title or "",
+                    "clause_path": chunk.clause_path,
+                }
+                for index, chunk in enumerate(by_doc.get(document_row_id, []))
+            ],
+        }
+    return documents
+
+
 def chunks_by_document(chunks: list[RagChunk]) -> dict[int, list[RagChunk]]:
     grouped: dict[int, list[RagChunk]] = {}
     for chunk in chunks:
@@ -1180,6 +1212,35 @@ def run_rag_eval(
             "documents": chunking_documents,
             "reviews": chunking_reviews,
         }
+    }
+    if legal_recursive_chunks:
+        lr_review_doc_ids = {int(doc_id) for doc_id in chunking_documents}
+        lr_documents = build_legal_recursive_documents(
+            legal_recursive_chunks, contracts, lr_review_doc_ids
+        )
+        lr_summary_rows = [
+            {
+                **chunking_summary_rows[0],
+                "chunking_version": "legal-recursive-v1",
+                "review_contract_sentences": sum(
+                    len(d.get("sentences", [])) for d in lr_documents.values()
+                ),
+            }
+        ] if chunking_summary_rows else []
+        lr_match_distribution = chunking_match_distribution
+        lr_reviews = chunking_reviews
+    else:
+        lr_documents = {}
+        lr_summary_rows = []
+        lr_match_distribution = []
+        lr_reviews = []
+    chunking_versions["legal-recursive-v1"] = {
+        "label": "legal-recursive-v1",
+        "source_chunking_version": legal_recursive_chunking_version,
+        "summary_rows": lr_summary_rows,
+        "match_distribution": lr_match_distribution,
+        "documents": lr_documents,
+        "reviews": lr_reviews,
     }
     chunking_version_comparison: list[dict[str, Any]] = []
     chunk_summary = chunking_summary(

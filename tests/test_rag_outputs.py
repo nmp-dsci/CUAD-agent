@@ -5,7 +5,7 @@ from pathlib import Path
 from cuad_agent.rag.experiments import run_rag_eval
 
 
-def test_rag_preflight_writes_outputs_and_frontend(tmp_path: Path) -> None:
+def test_rag_preflight_writes_outputs_and_dashboard(tmp_path: Path) -> None:
     output_dir = tmp_path / "outputs"
 
     summary = run_rag_eval(
@@ -32,7 +32,7 @@ def test_rag_preflight_writes_outputs_and_frontend(tmp_path: Path) -> None:
     assert (
         output_dir / "rag_cache/chunking/sentence-v3/encodings/tfidf/embeddings.npz"
     ).exists()
-    html_path = tmp_path / "frontend/rag_pipeline_eval.html"
+    html_path = tmp_path / "dashboards/rag_pipeline_eval.html"
     assert html_path.exists()
     html = html_path.read_text(encoding="utf-8")
     assert "Summary" in html

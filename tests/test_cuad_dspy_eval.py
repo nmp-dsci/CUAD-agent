@@ -88,10 +88,10 @@ def test_model_id_slug_and_output_paths() -> None:
     assert paths["model_dir"] == Path("outputs/model-a")
     assert paths["results"] == Path("outputs/model-a/cuad_dspy_eval_results.csv")
     assert paths["summary"] == Path("outputs/model-a/cuad_dspy_eval_summary.json")
-    assert paths["html"] == Path("frontend/evaluation_model-a.html")
+    assert paths["html"] == Path("dashboards/evaluation_model-a.html")
     assert paths["system_prompts"] == Path("outputs/model-a/system_prompts.py")
     explicit_paths = output_paths(Path("outputs"), "model-a", Path("custom.html"))
-    assert explicit_paths["html"] == Path("frontend/custom.html")
+    assert explicit_paths["html"] == Path("dashboards/custom.html")
     assert prompt_name_part("Anti-Assignment") == "ANTI_ASSIGNMENT"
 
 
@@ -457,7 +457,7 @@ def test_prompt_improve_v2_writes_harness_artifacts(tmp_path: Path, monkeypatch)
     assert "V2 extraction guidance" in candidate
     rejected = (harness_dir / "rejected_patches.jsonl").read_text(encoding="utf-8")
     assert '"category": "Anti-Assignment"' in rejected
-    dashboard = (tmp_path / "frontend" / "prompt_review_v2.html").read_text(
+    dashboard = (tmp_path / "dashboards" / "prompt_review_v2.html").read_text(
         encoding="utf-8"
     )
     assert "CUAD V2 Prompt Review" in dashboard

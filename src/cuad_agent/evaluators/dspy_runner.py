@@ -71,9 +71,11 @@ def resolve_model_id(args: argparse.Namespace) -> str:
     return slugify_model_id(args.model)
 
 
-def output_paths(output_dir: Path, model_id: str, html_output: Path | None) -> dict[str, Path]:
+def output_paths(
+    output_dir: Path, model_id: str, html_output: Path | None
+) -> dict[str, Path]:
     model_dir = output_dir / model_id
-    frontend_dir = output_dir.parent / "frontend"
+    frontend_dir = output_dir.parent / "dashboards"
     resolved_html_output = html_output
     if resolved_html_output is not None and not resolved_html_output.is_absolute():
         if resolved_html_output.parent == Path("."):
@@ -340,15 +342,17 @@ def build_eval_sample(
 
     contract_lookup = {
         int(key): value
-        for key, value in contracts.set_index("document_row_id").to_dict("index").items()
+        for key, value in contracts.set_index("document_row_id")
+        .to_dict("index")
+        .items()
     }
     eval_rows = questions[
         questions["document_row_id"].isin(selected_ids)
         & (questions["question_index"].isin(EVAL_QUESTION_INDICES))
     ]
-    eval_rows = eval_rows.sort_values(["document_row_id", "question_index"]).reset_index(
-        drop=True
-    )
+    eval_rows = eval_rows.sort_values(
+        ["document_row_id", "question_index"]
+    ).reset_index(drop=True)
 
     expected_rows = sample_size * EVAL_QUESTION_COUNT
     if eval_rows.shape[0] != expected_rows:
@@ -506,7 +510,9 @@ def write_system_prompts(
 def answer_texts(answers: Any) -> list[str]:
     if not isinstance(answers, list):
         return []
-    return [str(answer.get("text", "")) for answer in answers if isinstance(answer, dict)]
+    return [
+        str(answer.get("text", "")) for answer in answers if isinstance(answer, dict)
+    ]
 
 
 def build_devset(
@@ -547,7 +553,9 @@ def build_devset(
 def cuad_overlap_metric(
     example: dspy.Example, pred: dspy.Prediction, trace: Any = None
 ) -> float:
-    return token_overlap_f1(str(getattr(pred, "answer", "")), list(example.gold_answers))
+    return token_overlap_f1(
+        str(getattr(pred, "answer", "")), list(example.gold_answers)
+    )
 
 
 def eval_results_to_dataframe(
@@ -1149,6 +1157,62 @@ def configure_lm(args: argparse.Namespace) -> None:
     dspy.configure(lm=lm, adapter=dspy.ChatAdapter())
 
 
+def predicted_no_answer_mask(results: pd.DataFrame) -> pd.Series:
+    """Per-row model decision that the clause is absent.
+
+    Combines the explicit ``predicted_marked_impossible`` flag with the answer
+    text normalizing to a NO_ANSWER marker, so it agrees with how
+    ``token_overlap_f1`` scores the no-answer class.
+    """
+    if results.empty:
+        return pd.Series([], dtype=bool)
+    marked = results["predicted_marked_impossible"].astype(bool)
+    normalized = (
+        results["predicted_answer"]
+        .fillna("")
+        .map(lambda text: normalize_answer(str(text)) in NO_ANSWER_MARKERS)
+    )
+    return marked | normalized
+
+
+def detection_metrics(results: pd.DataFrame) -> dict[str, Any]:
+    """No-answer vs answer detection accuracy.
+
+    Many CUAD gold answers are "no answer", so aggregate F1 is dominated by the
+    no-answer class. These metrics split detection accuracy by gold class to
+    show how well the model identifies whether a clause is present at all.
+    """
+    if results.empty:
+        return {
+            "gold_no_answer_count": 0,
+            "gold_answer_count": 0,
+            "predicted_no_answer_count": 0,
+            "no_answer_detection_accuracy": None,
+            "answer_detection_accuracy": None,
+            "detection_accuracy": None,
+        }
+    gold_no = results["gold_marked_impossible"].astype(bool)
+    pred_no = predicted_no_answer_mask(results)
+    gold_no_count = int(gold_no.sum())
+    gold_answer_count = int((~gold_no).sum())
+    return {
+        "gold_no_answer_count": gold_no_count,
+        "gold_answer_count": gold_answer_count,
+        "predicted_no_answer_count": int(pred_no.sum()),
+        "no_answer_detection_accuracy": (
+            float((pred_no & gold_no).sum() / gold_no_count * 100)
+            if gold_no_count
+            else None
+        ),
+        "answer_detection_accuracy": (
+            float((~pred_no & ~gold_no).sum() / gold_answer_count * 100)
+            if gold_answer_count
+            else None
+        ),
+        "detection_accuracy": float((pred_no == gold_no).mean() * 100),
+    }
+
+
 def summarize_results(
     results: pd.DataFrame,
     *,
@@ -1189,11 +1253,16 @@ def summarize_results(
         "max_tokens": int(args.max_tokens),
         "num_threads": int(args.num_threads),
         "dry_run": bool(args.dry_run),
-        "prompts_file": str(args.prompts_file) if getattr(args, "prompts_file", None) else None,
-        "eval_split": str(args.eval_split) if getattr(args, "eval_split", None) else None,
+        "prompts_file": str(args.prompts_file)
+        if getattr(args, "prompts_file", None)
+        else None,
+        "eval_split": str(args.eval_split)
+        if getattr(args, "eval_split", None)
+        else None,
         "context_mode": str(getattr(args, "context_mode", "raw")),
         "overlap_accuracy_mean_f1": float(results["token_f1"].mean() * 100),
         "correct_at_0_5": float(results["correct_at_0_5"].mean() * 100),
+        **detection_metrics(results),
         "per_category": per_category,
     }
 
@@ -1275,8 +1344,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional explicit HTML output path. Defaults to "
-            "frontend/evaluation_MODEL_ID.html. Bare relative filenames are "
-            "written under frontend/."
+            "dashboards/evaluation_MODEL_ID.html. Bare relative filenames are "
+            "written under dashboards/."
         ),
     )
     parser.add_argument(
@@ -1344,7 +1413,9 @@ def main() -> None:
     )
     check_ids, _, _ = build_eval_sample(sample_size=args.sample_size, seed=args.seed)
     if selected_ids != check_ids:
-        raise AssertionError("Deterministic sampling failed for repeated build_eval_sample")
+        raise AssertionError(
+            "Deterministic sampling failed for repeated build_eval_sample"
+        )
     prompt_overrides = load_prompt_overrides(args.prompts_file)
     split_row_ids = load_eval_split_ids(args.eval_split)
     eval_rows = filter_eval_rows_by_split(eval_rows, split_row_ids)

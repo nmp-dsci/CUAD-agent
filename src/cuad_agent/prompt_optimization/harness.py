@@ -1439,7 +1439,7 @@ def run_harness(args: argparse.Namespace) -> None:
     results = read_results(args.source_results)
     errors = filter_error_rows(results)
     output_dir = args.output_dir / args.model_id / "prompt_harness"
-    frontend_dir = args.output_dir.parent / "frontend"
+    frontend_dir = args.output_dir.parent / "dashboards"
     dashboard_path = frontend_dir / f"prompt_review_{args.model_id}.html"
     output_dir.mkdir(parents=True, exist_ok=True)
     all_categories = categories_from_results(results)

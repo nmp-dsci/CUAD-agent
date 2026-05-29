@@ -94,7 +94,7 @@ Quick command map:
 uv run python rag_eval.py --sample-size 50 --seed 42 ...
 
 # 2. LLM answer-accuracy benchmark across all context modes. Full command below.
-uv run python agent.py --all-context-modes --sample-size 50 --seed 42 ...
+uv run python agent.py --all-context-modes --sample-size 50 --seed 42 
 ```
 
 ### Step 1 — Score RAG Retrieval for All Retriever Types

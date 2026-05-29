@@ -42,7 +42,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def rag_output_paths(output_dir: Path, run_id: str) -> dict[str, Path]:
     run_dir = output_dir / run_id / "rag"
-    frontend_dir = output_dir.parent / "frontend"
+    frontend_dir = output_dir.parent / "dashboards"
     return {
         "run_dir": run_dir,
         "frontend_dir": frontend_dir,
@@ -328,7 +328,8 @@ def write_pipeline_html(
   </header>
   <nav class="tabs" aria-label="RAG dashboard tabs">
     <button class="tab-button active" data-tab="summary">Summary</button>
-    <button class="tab-button" data-tab="chunking-v3">Chunking</button>
+    <button class="tab-button" data-tab="chunking-v3">Chunking — Sentence</button>
+    <button class="tab-button" data-tab="chunking-lr">Chunking — Recursive</button>
     <button class="tab-button" data-tab="enrichment">Enriched Query</button>
     <button class="tab-button" data-tab="hierarchical">Hierarchical RAG</button>
   </nav>
@@ -340,8 +341,8 @@ def write_pipeline_html(
       <div id="chunking-overview-table"></div>
     </section>
     <section id="chunking-v3" class="tab-panel">
-      <h2>Chunking</h2>
-      <p class="subtle">Review raw and chunked golden answers against contract chunks by document and question.</p>
+      <h2>Chunking — Sentence</h2>
+      <p class="subtle">Legal-aware sentence boundary detection (one sentence per chunk). Review how golden-answer sentences match against individual sentence chunks by document and question.</p>
       <div id="v3-summary-table"></div>
       <h2>Question Match Rates</h2>
       <p class="subtle">Chunk sentence matching rates per question. <strong>raw_contract_match_rate</strong> is the fraction of golden-answer sentences found verbatim in the raw contract text — the baseline extractability rate before any chunking.</p>
@@ -353,6 +354,21 @@ def write_pipeline_html(
         <select id="v3-question-select"></select>
       </div>
       <div id="v3-review-detail" class="review-grid"></div>
+    </section>
+    <section id="chunking-lr" class="tab-panel">
+      <h2>Chunking — Recursive</h2>
+      <p class="subtle">LangChain RecursiveCharacterTextSplitter chunks (~1200 chars, 150 overlap) using legal separators (ARTICLE/SECTION/lists). A chunk is highlighted as matched if any of its contained sentence IDs appear in the golden answer. Run with <code>--retrievers bm25_legal_recursive</code> or <code>dense_legal_recursive</code> to populate this tab.</p>
+      <div id="lr-summary-table"></div>
+      <h2>Question Match Rates</h2>
+      <p class="subtle">Same sentence-level golden-answer match rates as the Chunking tab — shown here for reference against the LR chunks on the right.</p>
+      <div id="lr-match-table"></div>
+      <div class="review-controls">
+        <label for="lr-document-select">Document</label>
+        <select id="lr-document-select"></select>
+        <label for="lr-question-select">Question</label>
+        <select id="lr-question-select"></select>
+      </div>
+      <div id="lr-review-detail" class="review-grid"></div>
     </section>
     <section id="enrichment" class="tab-panel">
       <h2>Enriched Query Evaluation</h2>
@@ -585,9 +601,13 @@ def write_pipeline_html(
           </div>`;
         }}).join('');
         const sentences = contractSentences.map((item) => {{
-          const klass = matchedIds.has(String(item.sentence_id)) ? 'match' : '';
+          const containedIds = item.contained_sentence_ids || [];
+          const klass = matchedIds.has(String(item.sentence_id)) || containedIds.some(id => matchedIds.has(String(id))) ? 'match' : '';
+          const chunkMeta = containedIds.length > 0
+            ? `${{escapeHtml(item.sentence_id)}} · ${{containedIds.length}} sentences · ${{escapeHtml(item.section_title || item.section_number || '')}}`
+            : `${{escapeHtml(item.sentence_id)}} · index ${{escapeHtml(item.sentence_index)}} · chars ${{escapeHtml(item.start_char)}}-${{escapeHtml(item.end_char)}}`;
           return `<div class="review-item ${{klass}}">
-            <div class="review-meta">${{escapeHtml(item.sentence_id)}} · index ${{escapeHtml(item.sentence_index)}} · chars ${{escapeHtml(item.start_char)}}-${{escapeHtml(item.end_char)}}</div>
+            <div class="review-meta">${{chunkMeta}}</div>
             <div class="review-text">${{escapeHtml(item.raw_text)}}</div>
           </div>`;
         }}).join('');
@@ -700,6 +720,7 @@ def write_pipeline_html(
       if (hierarchicalParameters) hierarchicalParameters.innerHTML = tableFromRows(hierarchicalParameterRows());
       renderHierarchicalBars();
       initChunkingPanel('v3', 'sentence-v3');
+      initChunkingPanel('lr', 'legal-recursive-v1');
     }}
     buttons.forEach((button) => {{
       button.addEventListener('click', () => {{

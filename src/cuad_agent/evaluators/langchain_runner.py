@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 
 from cuad_agent.constants import EVAL_QUESTION_INDICES, NO_ANSWER, NO_ANSWER_MARKERS
 from cuad_agent.dashboards.evaluation import write_evaluation_html
+from cuad_agent.dashboards.model_comparison import write_model_comparison_html
 from cuad_agent.eval.examples import answer_texts, evaluation_row_id
 from cuad_agent.data.sampling import select_evaluation_set
 from cuad_agent.eval.metrics import token_overlap_f1
@@ -46,7 +47,10 @@ from cuad_agent.paths import output_paths, prompt_name_part, resolve_model_id
 from cuad_agent.prompts.loader import load_prompt_overrides, resolve_prompts_file
 from cuad_agent.prompts.templates import compose_system_prompt
 from cuad_agent.rag.cache import DEFAULT_EMBEDDING_MODEL
-from cuad_agent.rag.context_builder import build_hierarchical_rag_context, build_rag_context
+from cuad_agent.rag.context_builder import (
+    build_hierarchical_rag_context,
+    build_rag_context,
+)
 from cuad_agent.rag.experiments import DEFAULT_CHUNKING_VERSION
 from cuad_agent.rag.query_enrichment import (
     RAG_DEFAULT_TOP_K,
@@ -463,11 +467,7 @@ def eval_results_to_dataframe(
             records.append(result_record(example, pred, score, model_id=model_id))
     if not records:
         return empty_results_dataframe()
-    return (
-        pd.DataFrame(records)
-        .sort_values(RESULT_SORT_COLUMNS)
-        .reset_index(drop=True)
-    )
+    return pd.DataFrame(records).sort_values(RESULT_SORT_COLUMNS).reset_index(drop=True)
 
 
 def ensure_row_id(results: pd.DataFrame) -> pd.DataFrame:
@@ -632,10 +632,9 @@ def build_baseline_comparison(
         )
 
     joined["token_f1_delta"] = joined["token_f1"] - joined["baseline_token_f1"]
-    joined["correct_at_0_5_delta"] = (
-        joined["correct_at_0_5"].astype(float)
-        - joined["baseline_correct_at_0_5"].astype(float)
-    )
+    joined["correct_at_0_5_delta"] = joined["correct_at_0_5"].astype(float) - joined[
+        "baseline_correct_at_0_5"
+    ].astype(float)
     baseline_model_id = None
     if "model_id" in baseline.columns and not baseline["model_id"].dropna().empty:
         baseline_model_id = str(baseline["model_id"].dropna().iloc[0])
@@ -969,7 +968,9 @@ def run_single_question_variants(
         model=query_enrichment_model,
     )
     enrichment = enrichments.get(question_index)
-    save_enriched_question_files(enrichments, output_dir, provider=query_enrichment_provider)
+    save_enriched_question_files(
+        enrichments, output_dir, provider=query_enrichment_provider
+    )
 
     records: list[dict[str, Any]] = []
 
@@ -979,7 +980,9 @@ def run_single_question_variants(
             if question_mode == "raw":
                 retrieval_query = query_for_row(row)
             else:
-                retrieval_query = enrichment.enriched_query if enrichment else query_for_row(row)
+                retrieval_query = (
+                    enrichment.enriched_query if enrichment else query_for_row(row)
+                )
 
             # Resolve contract context (runs even in dry-run for RAG modes)
             if context_mode == "raw":
@@ -1009,7 +1012,11 @@ def run_single_question_variants(
 
             # Enrichment hint: only for enriched-question + raw-context variant
             hint = ""
-            if question_mode == "enriched" and context_mode == "raw" and enrichment is not None:
+            if (
+                question_mode == "enriched"
+                and context_mode == "raw"
+                and enrichment is not None
+            ):
                 hint = enrichment.enrichment_terms
 
             inputs = {
@@ -1029,7 +1036,9 @@ def run_single_question_variants(
                 )
             else:
                 if llm is None:
-                    raise RuntimeError("LLM not configured for non-dry-run single-q mode")
+                    raise RuntimeError(
+                        "LLM not configured for non-dry-run single-q mode"
+                    )
                 if hint:
                     messages = make_messages_with_hint(inputs, hint, full_system)
                 else:
@@ -1062,7 +1071,9 @@ def run_single_question_variants(
                     "gold_answers": json.dumps(gold_answers, ensure_ascii=False),
                     "token_f1": score,
                     "correct_at_0_5": score >= 0.5,
-                    "enrichment_terms": enrichment.enrichment_terms if enrichment else "",
+                    "enrichment_terms": enrichment.enrichment_terms
+                    if enrichment
+                    else "",
                     "document_row_id": contract_id,
                     "question_index": question_index,
                     "category": category,
@@ -1191,13 +1202,8 @@ def run_full_evaluation(args: argparse.Namespace) -> dict[str, Any]:
             hierarchical_leaf_k=args.hierarchical_leaf_k,
             hierarchical_top_sections=args.hierarchical_top_sections,
         )
-        updated_by_row_id = {
-            str(ex["row_id"]): ex for ex in updated_missing_devset
-        }
-        devset = [
-            updated_by_row_id.get(str(ex["row_id"]), ex)
-            for ex in devset
-        ]
+        updated_by_row_id = {str(ex["row_id"]): ex for ex in updated_missing_devset}
+        devset = [updated_by_row_id.get(str(ex["row_id"]), ex) for ex in devset]
 
     new_results = empty_results_dataframe()
     jsonl_lock = threading.Lock()
@@ -1284,6 +1290,7 @@ def run_all_context_modes(args: argparse.Namespace) -> None:
     prefix = args.model_id or "eval"
     summaries: list[dict[str, Any]] = []
     labels: list[str] = []
+    models_payload: list[dict[str, Any]] = []
     for context_mode in FULL_EVAL_CONTEXT_MODES:
         mode_args = copy.copy(args)
         mode_args.all_context_modes = False
@@ -1295,17 +1302,35 @@ def run_all_context_modes(args: argparse.Namespace) -> None:
             f"(model_id={mode_args.model_id}) ===",
             flush=True,
         )
-        summaries.append(run_full_evaluation(mode_args))
-        labels.append(
+        summary = run_full_evaluation(mode_args)
+        summaries.append(summary)
+        label = {
+            "raw": "raw",
+            "rag-dense": "rag-dense",
+            "rag-hybrid": "rag-hybrid",
+            "rag-hierarchical-bm25": "hier-bm25",
+            "rag-hierarchical-dense": "hier-dense",
+        }[context_mode]
+        labels.append(label)
+        results_path = output_paths(args.output_dir, mode_args.model_id, None)[
+            "results"
+        ]
+        models_payload.append(
             {
-                "raw": "raw",
-                "rag-dense": "rag-dense",
-                "rag-hybrid": "rag-hybrid",
-                "rag-hierarchical-bm25": "hier-bm25",
-                "rag-hierarchical-dense": "hier-dense",
-            }[context_mode]
+                "label": label,
+                "model_id": mode_args.model_id,
+                "context_mode": context_mode,
+                "summary": summary,
+                "results": pd.read_csv(results_path),
+            }
         )
     print_run_comparison(summaries, labels)
+
+    comparison_path = (
+        args.output_dir.parent / "dashboards" / f"eval_comparison_{prefix}.html"
+    )
+    write_model_comparison_html(models_payload, comparison_path)
+    print(f"\nSaved model comparison dashboard to {comparison_path}", flush=True)
 
 
 def parse_args() -> argparse.Namespace:
@@ -1346,9 +1371,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional explicit HTML output path. Defaults to "
-            "frontend/evaluation_MODEL_ID.html for cross-comparability "
+            "dashboards/evaluation_MODEL_ID.html for cross-comparability "
             "with dspy_eval_v1.py output. Bare relative filenames are "
-            "written under frontend/."
+            "written under dashboards/."
         ),
     )
     parser.add_argument(
@@ -1468,7 +1493,9 @@ def main() -> None:
 
     if args.single_q:
         if args.contract_id is None or args.question_index is None:
-            raise ValueError("--single-q requires both --contract-id and --question-index")
+            raise ValueError(
+                "--single-q requires both --contract-id and --question-index"
+            )
         prompts_file = args.prompts_file or Path("prompts/system_prompts_v2.py")
         if not prompts_file.exists():
             raise FileNotFoundError(
@@ -1482,7 +1509,9 @@ def main() -> None:
         if not args.dry_run:
             llm = configure_llm(args)
 
-        question_modes = ["raw", "enriched"] if args.compare_variants else [args.question_mode]
+        question_modes = (
+            ["raw", "enriched"] if args.compare_variants else [args.question_mode]
+        )
         context_modes = (
             [
                 "raw",
