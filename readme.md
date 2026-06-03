@@ -477,19 +477,48 @@ uv run python -m pytest -q
 
 ```text
 src/cuad_agent/
+├── agents/                # Agent implementations
+│   ├── dspy_agent.py      # DSPy-based legal review agent
+│   └── langchain_agent.py # LangChain-based legal review agent
 ├── data/                  # CUAD loading, validation, sampling
 ├── eval/                  # metrics, examples, summaries
-├── evaluators/            # DSPy and LangChain runner implementations
+├── evaluators/            # Runner implementations and shared CLI helpers
+│   ├── cli_common.py      # Shared argument parsing and runner utilities
+│   ├── dspy_runner.py     # DSPy evaluation runner
+│   └── langchain_runner.py # LangChain evaluation runner
 ├── prompts/               # prompt loading, templates, serialization
 ├── prompt_optimization/   # prompt-improvement harness
 ├── dashboards/            # static evaluation HTML renderers
 ├── rag/                   # sentence chunking, retrieval, coverage
 │   ├── cache.py           # shared cache I/O (slugify, load_or_build_*)
+│   ├── chunks.py          # chunk data types and utilities
+│   ├── clauses.py         # clause-level span extraction
+│   ├── cli.py             # rag_eval CLI entrypoint
 │   ├── context_builder.py # build_rag_context() → context string for agent
+│   ├── contracts.py       # contract-scoped chunking orchestration
 │   ├── coverage.py        # coverage_at_k, coverage_by_top_chunks
 │   ├── experiments.py     # run_rag_eval() orchestrator
-│   └── query_enrichment.py # build_question_enrichments(), hybrid_fuse_results()
+│   ├── gold_answers.py    # golden-answer span loading and alignment
+│   ├── hierarchy.py       # hierarchical section expansion logic
+│   ├── indexes.py         # BM25 and dense index build/load
+│   ├── legal_recursive.py # legal-recursive chunking strategy
+│   ├── outputs.py         # result serialization helpers
+│   ├── query_enrichment.py # build_question_enrichments(), hybrid_fuse_results()
+│   ├── retrievers.py      # retriever dispatch (bm25/dense/hybrid/hierarchical)
+│   └── sentences.py       # sentence-level chunking and span alignment
 └── cli/                   # cuad-* console script entrypoints
+```
+
+Root-level scripts (compatibility wrappers and utilities):
+
+```text
+agent.py                   # Primary LangChain agent evaluator
+explore.py                 # Dataset exploration
+dspy_eval_v1.py            # DSPy baseline eval
+langchain_agent.py         # LangChain agent compatibility wrapper
+prompt_improve_v2.py       # Prompt optimization harness
+rag_eval.py                # RAG pipeline evaluation
+visualize_langchain_agent.py # LangChain agent graph visualizer
 ```
 
 Console commands (equivalent to the root scripts):

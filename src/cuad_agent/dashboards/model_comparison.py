@@ -17,7 +17,7 @@ from typing import Any
 
 import pandas as pd
 
-from cuad_agent.evaluators.dspy_runner import (
+from cuad_agent.eval.summary import (
     detection_metrics,
     predicted_no_answer_mask,
 )

@@ -1,0 +1,6 @@
+[
+  { "repo": "langchain-ai/langchain", "version": "1.0.7" },
+  { "repo": "pydantic/pydantic", "version": "2.12.5" },
+  { "repo": "stanfordnlp/dspy", "version": "3.2.1" }
+  
+]
