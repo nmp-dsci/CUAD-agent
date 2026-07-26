@@ -52,7 +52,8 @@ def rag_output_paths(output_dir: Path, run_id: str) -> dict[str, Path]:
         "sentences": run_dir / "rag_sentences.jsonl",
         "results_jsonl": run_dir / "rag_retrieval_results.jsonl",
         "results_csv": run_dir / "rag_retrieval_results.csv",
-        "results_doc_question_summary": run_dir / "rag_retrieval_doc_question_summary.csv",
+        "results_doc_question_summary": run_dir
+        / "rag_retrieval_doc_question_summary.csv",
         "summary": run_dir / "rag_summary.json",
         "ranking_summary": run_dir / "rag_ranking_summary.csv",
         "query_enrichment_results": run_dir / "rag_query_enrichment_results.csv",
@@ -82,7 +83,10 @@ def write_simple_html(
             for column in columns
         )
         table_rows.append(f"<tr>{cells}</tr>")
-    header = "".join(f"<th><span class=\"column-title\">{html.escape(column)}</span></th>" for column in columns)
+    header = "".join(
+        f'<th><span class="column-title">{html.escape(column)}</span></th>'
+        for column in columns
+    )
     path.write_text(
         f"""<!doctype html>
 <html lang="en">
@@ -105,7 +109,7 @@ def write_simple_html(
   <section class="summary">{summary_items}</section>
   <table>
     <thead><tr>{header}</tr></thead>
-    <tbody>{''.join(table_rows)}</tbody>
+    <tbody>{"".join(table_rows)}</tbody>
   </table>
 </body>
 </html>
@@ -134,7 +138,7 @@ def _summary_cards(summary: dict[str, Any]) -> str:
         if key not in {key for key, _ in items} and not isinstance(value, (list, dict))
     )
     return "\n".join(
-        "<div class=\"metric\">"
+        '<div class="metric">'
         f"<span>{html.escape(str(key).replace('_', ' ').title())}</span>"
         f"<strong>{html.escape(_format_display_value(key, value))}</strong>"
         "</div>"
@@ -144,7 +148,9 @@ def _summary_cards(summary: dict[str, Any]) -> str:
 
 def _is_percentage_metric(column: str) -> bool:
     lowered = column.lower()
-    if any(blocked in lowered for blocked in ("count", "rows", "seconds", "id", "index")):
+    if any(
+        blocked in lowered for blocked in ("count", "rows", "seconds", "id", "index")
+    ):
         return False
     return any(
         marker in lowered
@@ -173,9 +179,12 @@ def _format_display_value(column: str, value: Any) -> str:
 
 def _table(rows: list[dict[str, Any]], *, limit: int = 500) -> str:
     if not rows:
-        return "<p class=\"empty\">No rows for this tab.</p>"
+        return '<p class="empty">No rows for this tab.</p>'
     columns = list(rows[0].keys())
-    header = "".join(f"<th><span class=\"column-title\">{html.escape(column)}</span></th>" for column in columns)
+    header = "".join(
+        f'<th><span class="column-title">{html.escape(column)}</span></th>'
+        for column in columns
+    )
     body_rows: list[str] = []
     for row in rows[:limit]:
         cells = "".join(
@@ -184,7 +193,7 @@ def _table(rows: list[dict[str, Any]], *, limit: int = 500) -> str:
         )
         body_rows.append(f"<tr>{cells}</tr>")
     return (
-        "<div class=\"table-wrap\"><table>"
+        '<div class="table-wrap"><table>'
         f"<thead><tr>{header}</tr></thead>"
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table></div>"
@@ -218,11 +227,6 @@ def write_pipeline_html(
 ) -> None:
     """Write one tabbed RAG dashboard for the latest pipeline run."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    artifacts = [
-        {"artifact": key, "path": str(value)}
-        for key, value in artifact_paths.items()
-        if key not in {"run_dir", "frontend_dir", "pipeline_html"}
-    ]
     payload = {
         "summary": summary,
         "chunking_versions": chunking_versions,

@@ -82,8 +82,13 @@ def test_complete_sentence_match_requires_exact_sentence_boundaries() -> None:
 
 
 def test_model_id_slug_and_output_paths() -> None:
-    assert slugify_model_id("deepseek/deepseek-v4-flash") == "deepseek-deepseek-v4-flash"
-    assert slugify_model_id("OpenAI/GPT-5.4 Mini:baseline") == "openai-gpt-5.4-mini-baseline"
+    assert (
+        slugify_model_id("deepseek/deepseek-v4-flash") == "deepseek-deepseek-v4-flash"
+    )
+    assert (
+        slugify_model_id("OpenAI/GPT-5.4 Mini:baseline")
+        == "openai-gpt-5.4-mini-baseline"
+    )
     paths = output_paths(Path("outputs"), "model-a", None)
     assert paths["model_dir"] == Path("outputs/model-a")
     assert paths["results"] == Path("outputs/model-a/cuad_dspy_eval_results.csv")
@@ -117,13 +122,12 @@ def test_build_agents_preserves_category_metadata() -> None:
     assert agents[40].category == "Third Party Beneficiary"
     assert len({type(agent) for agent in agents.values()}) == EVAL_QUESTION_COUNT
     assert (
-        len({agent.signature_class for agent in agents.values()})
-        == EVAL_QUESTION_COUNT
+        len({agent.signature_class for agent in agents.values()}) == EVAL_QUESTION_COUNT
     )
     for question_index, agent in agents.items():
-        question = rows.loc[
-            rows["question_index"] == question_index, "question"
-        ].iloc[0]
+        question = rows.loc[rows["question_index"] == question_index, "question"].iloc[
+            0
+        ]
         assert agent.signature_class.__doc__ == agent.question
         assert agent.signature_class.__doc__ == question
         assert agent.__class__.__doc__ == agent.question
@@ -155,8 +159,13 @@ def test_build_agents_can_use_prompt_overrides(tmp_path: Path) -> None:
     overrides = load_prompt_overrides(prompt_file)
     _, _, rows = build_eval_sample(sample_size=1, seed=42)
     agents = build_agents(rows, dry_run=True, prompt_overrides=overrides)
-    assert agents[0].signature_class.__doc__ == "Custom document-name extraction prompt."
-    assert build_agent_system_prompt(agents[0]) == "Custom document-name extraction prompt."
+    assert (
+        agents[0].signature_class.__doc__ == "Custom document-name extraction prompt."
+    )
+    assert (
+        build_agent_system_prompt(agents[0])
+        == "Custom document-name extraction prompt."
+    )
     assert agents[1].signature_class.__doc__ == agents[1].question
 
 
@@ -213,9 +222,9 @@ def test_dry_run_evaluation_shape_and_order() -> None:
         results["gold_marked_impossible"]
     )
     assert results[["document_row_id", "question_index"]].equals(
-        results[["document_row_id", "question_index"]].sort_values(
-            ["document_row_id", "question_index"]
-        ).reset_index(drop=True)
+        results[["document_row_id", "question_index"]]
+        .sort_values(["document_row_id", "question_index"])
+        .reset_index(drop=True)
     )
 
 
@@ -336,7 +345,9 @@ def test_write_evaluation_html_creates_static_page(tmp_path: Path) -> None:
     assert "Question text" in html
 
 
-def test_prompt_improve_v2_writes_harness_artifacts(tmp_path: Path, monkeypatch) -> None:
+def test_prompt_improve_v2_writes_harness_artifacts(
+    tmp_path: Path, monkeypatch
+) -> None:
     source_results = tmp_path / "cuad_dspy_eval_results.csv"
     pd.DataFrame(
         [
@@ -705,7 +716,12 @@ def test_langchain_eval_appends_and_loads_jsonl_results(tmp_path: Path) -> None:
     append_result_jsonl(jsonl_path, base_record, threading.Lock())
     append_result_jsonl(
         jsonl_path,
-        {**base_record, "predicted_answer": "new", "token_f1": 1.0, "correct_at_0_5": True},
+        {
+            **base_record,
+            "predicted_answer": "new",
+            "token_f1": 1.0,
+            "correct_at_0_5": True,
+        },
         threading.Lock(),
     )
     eval_rows = pd.DataFrame([{"document_row_id": 1, "question_index": 0}])

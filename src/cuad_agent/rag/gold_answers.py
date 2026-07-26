@@ -71,7 +71,9 @@ class EligibilityRecord:
             ),
             "reason": self.reason,
             "matched_sentence_ids": self.matched_sentence_ids,
-            "golden_sentences": [sentence.to_dict() for sentence in self.golden_sentences],
+            "golden_sentences": [
+                sentence.to_dict() for sentence in self.golden_sentences
+            ],
         }
 
 
@@ -194,9 +196,13 @@ def evaluate_row_eligibility(
     coverage = matched_count / len(records) if records else 0.0
     raw_contract_coverage = raw_contract_match_count / len(records) if records else 0.0
     is_eligible = bool(records) and matched_count == len(records)
-    reason = None if is_eligible else next(
-        (record.reason for record in records if record.reason),
-        "gold_answer_not_found",
+    reason = (
+        None
+        if is_eligible
+        else next(
+            (record.reason for record in records if record.reason),
+            "gold_answer_not_found",
+        )
     )
     return EligibilityRecord(
         row_id=row_id,

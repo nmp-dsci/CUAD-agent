@@ -1092,7 +1092,6 @@ def print_variant_table(df: pd.DataFrame) -> None:
     col_variant = 26
     col_f1 = 10
     col_correct = 13
-    col_pred = 28
 
     header = (
         f"{'Variant':<{col_variant}} | {'Token F1':^{col_f1}} | "

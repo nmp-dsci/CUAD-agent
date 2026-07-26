@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from cuad_agent.rag.coverage import coverage_at_k
-from cuad_agent.rag.gold_answers import evaluate_row_eligibility, split_golden_answer_sentences
+from cuad_agent.rag.gold_answers import (
+    evaluate_row_eligibility,
+    split_golden_answer_sentences,
+)
 from cuad_agent.rag.sentences import build_sentence_spans
 
 
@@ -54,12 +57,7 @@ def test_partial_span_is_not_sentence_extraction_eligible() -> None:
 
 def test_golden_answer_newline_does_not_force_chunk_split() -> None:
     chunks = split_golden_answer_sentences(
-        [
-            (
-                "The buyer shall maintain insurance\n"
-                "and comply with all applicable laws."
-            )
-        ]
+        [("The buyer shall maintain insurance\nand comply with all applicable laws.")]
     )
 
     assert chunks == [

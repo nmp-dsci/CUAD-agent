@@ -17,11 +17,8 @@ from cuad_agent.data.sampling import (
     select_evaluation_set,
 )
 from cuad_agent.rag.cache import (
-    DEFAULT_EMBEDDING_MODEL,
     ProgressLogger,
-    dense_encoding_cache_dir,
     emit_progress,
-    index_cache_path,
     load_cached_sentence_spans_for_version,
     load_or_build_dense_sentence_encoder,
     load_or_build_retriever,
@@ -31,9 +28,20 @@ from cuad_agent.rag.cache import (
 from cuad_agent.rag.chunks import RagChunk, chunk_from_dict, chunks_from_sentences
 from cuad_agent.rag.clauses import build_section_metadata
 from cuad_agent.rag.contracts import ContractDocument, contracts_from_lookup
-from cuad_agent.rag.coverage import coverage_by_top_chunks, retrieved_sentence_ids_from_results
-from cuad_agent.rag.gold_answers import EligibilityRecord, answer_texts, evaluate_row_eligibility
-from cuad_agent.rag.hierarchy import HIERARCHICAL_RETRIEVERS, HierarchicalRetriever, build_section_index
+from cuad_agent.rag.coverage import (
+    coverage_by_top_chunks,
+    retrieved_sentence_ids_from_results,
+)
+from cuad_agent.rag.gold_answers import (
+    EligibilityRecord,
+    answer_texts,
+    evaluate_row_eligibility,
+)
+from cuad_agent.rag.hierarchy import (
+    HIERARCHICAL_RETRIEVERS,
+    HierarchicalRetriever,
+    build_section_index,
+)
 from cuad_agent.rag.legal_recursive import (
     LEGAL_RECURSIVE_CHUNKING_VERSION,
     LegalRecursiveConfig,
@@ -81,7 +89,9 @@ def chunk_cache_paths(output_dir: Path, chunking_version: str) -> dict[str, Path
     }
 
 
-def sentence_manifest(contracts: dict[int, ContractDocument], chunking_version: str) -> dict[str, Any]:
+def sentence_manifest(
+    contracts: dict[int, ContractDocument], chunking_version: str
+) -> dict[str, Any]:
     return {
         "chunking_version": chunking_version,
         "sentence_splitter": "pysbd-if-available-with-deterministic-fallback",
@@ -110,7 +120,9 @@ def legal_recursive_manifest(
     }
 
 
-def load_sentence_cache(paths: dict[str, Path], manifest: dict[str, Any]) -> list[SentenceSpan] | None:
+def load_sentence_cache(
+    paths: dict[str, Path], manifest: dict[str, Any]
+) -> list[SentenceSpan] | None:
     if not paths["manifest"].exists() or not paths["sentences"].exists():
         return None
     try:
@@ -125,14 +137,18 @@ def load_sentence_cache(paths: dict[str, Path], manifest: dict[str, Any]) -> lis
         return None
 
 
-def sentence_lookup_from_spans(spans: list[SentenceSpan]) -> dict[int, list[SentenceSpan]]:
+def sentence_lookup_from_spans(
+    spans: list[SentenceSpan],
+) -> dict[int, list[SentenceSpan]]:
     lookup: dict[int, list[SentenceSpan]] = {}
     for span in spans:
         lookup.setdefault(span.document_row_id, []).append(span)
     return lookup
 
 
-def load_chunk_cache(paths: dict[str, Path], manifest: dict[str, Any]) -> list[RagChunk] | None:
+def load_chunk_cache(
+    paths: dict[str, Path], manifest: dict[str, Any]
+) -> list[RagChunk] | None:
     if not paths["manifest"].exists() or not paths["chunks"].exists():
         return None
     try:
@@ -264,7 +280,9 @@ def build_legal_recursive_documents(
     for document_row_id in sorted(review_document_ids):
         contract = contracts.get(
             document_row_id,
-            ContractDocument(document_row_id=document_row_id, title=str(document_row_id), text=""),
+            ContractDocument(
+                document_row_id=document_row_id, title=str(document_row_id), text=""
+            ),
         )
         documents[str(document_row_id)] = {
             "document_row_id": document_row_id,
@@ -327,24 +345,34 @@ def eligibility_records(
     return records
 
 
-def all_contract_question_rows(question_indices: list[int] | None = None) -> pd.DataFrame:
+def all_contract_question_rows(
+    question_indices: list[int] | None = None,
+) -> pd.DataFrame:
     questions = load_datasets()["questions"].copy()
     if question_indices:
         questions = questions[questions["question_index"].isin(question_indices)].copy()
-    return questions.sort_values(["document_row_id", "question_index"]).reset_index(drop=True)
+    return questions.sort_values(["document_row_id", "question_index"]).reset_index(
+        drop=True
+    )
 
 
 def summarize_eligibility(records: list[EligibilityRecord]) -> dict[str, Any]:
-    extraction_records = [record for record in records if record.gold_sentence_count > 0]
+    extraction_records = [
+        record for record in records if record.gold_sentence_count > 0
+    ]
     eligible = [record for record in records if record.is_eligible]
     return {
         "rows_total": len(records),
         "rows_with_gold_sentences": len(extraction_records),
         "eligible_rows": len(eligible),
         "non_eligible_rows": len(records) - len(eligible),
-        "eligible_rate": len(eligible) / len(extraction_records) if extraction_records else 0.0,
+        "eligible_rate": len(eligible) / len(extraction_records)
+        if extraction_records
+        else 0.0,
         "gold_sentence_count": sum(record.gold_sentence_count for record in records),
-        "matched_sentence_count": sum(record.matched_sentence_count for record in records),
+        "matched_sentence_count": sum(
+            record.matched_sentence_count for record in records
+        ),
         "raw_contract_sentence_match_count": sum(
             record.raw_contract_sentence_match_count for record in records
         ),
@@ -357,7 +385,9 @@ def summarize_eligibility(records: list[EligibilityRecord]) -> dict[str, Any]:
     }
 
 
-def summarize_eligibility_by_question(records: list[EligibilityRecord]) -> list[dict[str, Any]]:
+def summarize_eligibility_by_question(
+    records: list[EligibilityRecord],
+) -> list[dict[str, Any]]:
     grouped: dict[int, list[EligibilityRecord]] = {}
     for record in records:
         grouped.setdefault(record.question_index, []).append(record)
@@ -369,7 +399,9 @@ def summarize_eligibility_by_question(records: list[EligibilityRecord]) -> list[
         ]
         eligible = [record for record in with_gold if record.is_eligible]
         total_gold_sentences = sum(record.gold_sentence_count for record in with_gold)
-        total_matched_sentences = sum(record.matched_sentence_count for record in with_gold)
+        total_matched_sentences = sum(
+            record.matched_sentence_count for record in with_gold
+        )
         total_raw_contract_matches = sum(
             record.raw_contract_sentence_match_count for record in with_gold
         )
@@ -394,7 +426,9 @@ def summarize_eligibility_by_question(records: list[EligibilityRecord]) -> list[
                 "full_match_rate": round(full_match_rate, 4),
                 "split_golden_sentence_count": total_gold_sentences,
                 "raw_contract_matched_split_golden_sentence_count": total_raw_contract_matches,
-                "raw_contract_sentence_match_rate": round(raw_contract_sentence_match_rate, 4),
+                "raw_contract_sentence_match_rate": round(
+                    raw_contract_sentence_match_rate, 4
+                ),
                 "matched_split_golden_sentence_count": total_matched_sentences,
                 "split_sentence_match_rate": round(split_sentence_match_rate, 4),
                 "strict_sentence_extraction_question": (
@@ -447,7 +481,10 @@ def run_sentence_retrieval(
     chunking_version: str,
     embedding_model: str,
     rebuild_embeddings: bool,
-    prebuilt_retrievers: dict[str, tuple[SentenceRetriever | HierarchicalRetriever, bool]] | None = None,
+    prebuilt_retrievers: dict[
+        str, tuple[SentenceRetriever | HierarchicalRetriever, bool]
+    ]
+    | None = None,
     progress: ProgressLogger | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, bool]]:
     rows_by_id = {
@@ -457,7 +494,9 @@ def run_sentence_retrieval(
     results: list[dict[str, Any]] = []
     ranking_summary: list[dict[str, Any]] = []
     cache_hits: dict[str, bool] = {}
-    eligible_count = sum(1 for eligibility in eligibility_by_row_id.values() if eligibility.is_eligible)
+    eligible_count = sum(
+        1 for eligibility in eligibility_by_row_id.values() if eligibility.is_eligible
+    )
     prebuilt_retrievers = prebuilt_retrievers or {}
     chunks_by_method = chunks_by_method or {}
     chunking_version_by_method = chunking_version_by_method or {}
@@ -465,7 +504,9 @@ def run_sentence_retrieval(
     retrieval_cutoffs = tuple(sorted({1, 3, 5, 10, 20, 30, top_k}))
     for method in retriever_methods:
         method_chunks = chunks_by_method.get(method, chunks)
-        method_chunking_version = chunking_version_by_method.get(method, chunking_version)
+        method_chunking_version = chunking_version_by_method.get(
+            method, chunking_version
+        )
         emit_progress(
             progress,
             f"Running retrieval method {method}: chunks={len(method_chunks)}, eligible rows={eligible_count}, top_k={retrieval_top_k}",
@@ -547,7 +588,9 @@ def run_sentence_retrieval(
     return results, ranking_summary, cache_hits
 
 
-def summarize_retrieval_method(method: str, rows: list[dict[str, Any]], top_k: int) -> dict[str, Any]:
+def summarize_retrieval_method(
+    method: str, rows: list[dict[str, Any]], top_k: int
+) -> dict[str, Any]:
     cutoffs = tuple(sorted({1, 3, 5, 10, 20, 30, top_k}))
     if not rows:
         output: dict[str, Any] = {
@@ -640,7 +683,9 @@ def summarize_retrieval_by_document_question(
     return summary_rows
 
 
-def summarize_chunk_matching_by_question(records: list[EligibilityRecord]) -> list[dict[str, Any]]:
+def summarize_chunk_matching_by_question(
+    records: list[EligibilityRecord],
+) -> list[dict[str, Any]]:
     grouped: dict[int, list[EligibilityRecord]] = {}
     for record in records:
         if record.gold_sentence_count <= 0:
@@ -662,8 +707,12 @@ def summarize_chunk_matching_by_question(records: list[EligibilityRecord]) -> li
         no_match = [
             record for record in question_records if record.matched_sentence_count == 0
         ]
-        total_gold_sentences = sum(record.gold_sentence_count for record in question_records)
-        matched_sentences = sum(record.matched_sentence_count for record in question_records)
+        total_gold_sentences = sum(
+            record.gold_sentence_count for record in question_records
+        )
+        matched_sentences = sum(
+            record.matched_sentence_count for record in question_records
+        )
         raw_contract_matched = sum(
             record.raw_contract_sentence_match_count for record in question_records
         )
@@ -676,17 +725,23 @@ def summarize_chunk_matching_by_question(records: list[EligibilityRecord]) -> li
                 "partial_match_rows": len(partial_match),
                 "no_match_rows": len(no_match),
                 "full_match_rate": round(len(full_match) / len(question_records), 4),
-                "partial_match_rate": round(len(partial_match) / len(question_records), 4),
+                "partial_match_rate": round(
+                    len(partial_match) / len(question_records), 4
+                ),
                 "no_match_rate": round(len(no_match) / len(question_records), 4),
                 "split_golden_sentence_count": total_gold_sentences,
                 "matched_split_golden_sentence_count": matched_sentences,
                 "split_sentence_match_rate": round(
-                    matched_sentences / total_gold_sentences if total_gold_sentences else 0.0,
+                    matched_sentences / total_gold_sentences
+                    if total_gold_sentences
+                    else 0.0,
                     4,
                 ),
                 "raw_contract_matched_sentence_count": raw_contract_matched,
                 "raw_contract_match_rate": round(
-                    raw_contract_matched / total_gold_sentences if total_gold_sentences else 0.0,
+                    raw_contract_matched / total_gold_sentences
+                    if total_gold_sentences
+                    else 0.0,
                     4,
                 ),
             }
@@ -716,8 +771,12 @@ def chunk_match_counts(records: list[EligibilityRecord]) -> dict[int, dict[str, 
         no_match = [
             record for record in question_records if record.matched_sentence_count == 0
         ]
-        total_gold_sentences = sum(record.gold_sentence_count for record in question_records)
-        matched_sentences = sum(record.matched_sentence_count for record in question_records)
+        total_gold_sentences = sum(
+            record.gold_sentence_count for record in question_records
+        )
+        matched_sentences = sum(
+            record.matched_sentence_count for record in question_records
+        )
         counts[question_index] = {
             "category": question_records[0].category,
             "rows_with_split_golden_answer_sentences": len(question_records),
@@ -727,7 +786,9 @@ def chunk_match_counts(records: list[EligibilityRecord]) -> dict[int, dict[str, 
             "split_golden_sentence_count": total_gold_sentences,
             "matched_split_golden_sentence_count": matched_sentences,
             "split_sentence_match_rate": (
-                matched_sentences / total_gold_sentences if total_gold_sentences else 0.0
+                matched_sentences / total_gold_sentences
+                if total_gold_sentences
+                else 0.0
             ),
             "full_match_rate": len(full_match) / len(question_records)
             if question_records
@@ -759,7 +820,9 @@ def compare_chunking_versions_by_question(
                 "baseline_version": baseline_version,
                 "comparison_version": comparison_version,
                 "baseline_rows": base.get("rows_with_split_golden_answer_sentences", 0),
-                "comparison_rows": other.get("rows_with_split_golden_answer_sentences", 0),
+                "comparison_rows": other.get(
+                    "rows_with_split_golden_answer_sentences", 0
+                ),
                 "baseline_full_match_rows": base.get("full_match_rows", 0),
                 "comparison_full_match_rows": other.get("full_match_rows", 0),
                 "full_match_row_delta": int(base.get("full_match_rows", 0))
@@ -910,17 +973,22 @@ def build_chunking_review_payload(
             {
                 "row_id": row_id,
                 "document_row_id": int(row.document_row_id),
-                "document_title": contracts.get(int(row.document_row_id), ContractDocument(
-                    document_row_id=int(row.document_row_id),
-                    title=str(row.document_row_id),
-                    text="",
-                )).title,
+                "document_title": contracts.get(
+                    int(row.document_row_id),
+                    ContractDocument(
+                        document_row_id=int(row.document_row_id),
+                        title=str(row.document_row_id),
+                        text="",
+                    ),
+                ).title,
                 "question_index": int(row.question_index),
                 "category": str(row.category),
                 "question": str(row.question),
                 "raw_question": str(row.question),
                 "enriched_question": (
-                    str(enrichment.enriched_query) if enrichment is not None else str(row.question)
+                    str(enrichment.enriched_query)
+                    if enrichment is not None
+                    else str(row.question)
                 ),
                 "enrichment_terms": (
                     str(enrichment.enrichment_terms) if enrichment is not None else ""
@@ -930,7 +998,9 @@ def build_chunking_review_payload(
                 "gold_sentence_count": record.gold_sentence_count,
                 "matched_sentence_count": record.matched_sentence_count,
                 "match_rate": round(record.per_row_gold_sentence_contract_coverage, 4),
-                "match_status": "full_match" if record.is_eligible else "partial_or_no_match",
+                "match_status": "full_match"
+                if record.is_eligible
+                else "partial_or_no_match",
                 "reason": record.reason,
                 "matched_sentence_ids": record.matched_sentence_ids,
                 "golden_sentences": [
@@ -943,7 +1013,9 @@ def build_chunking_review_payload(
     for document_row_id in sorted(review_document_ids):
         contract = contracts.get(
             document_row_id,
-            ContractDocument(document_row_id=document_row_id, title=str(document_row_id), text=""),
+            ContractDocument(
+                document_row_id=document_row_id, title=str(document_row_id), text=""
+            ),
         )
         documents[str(document_row_id)] = {
             "document_row_id": document_row_id,
@@ -1082,13 +1154,15 @@ def run_rag_eval(
     legal_recursive_chunks: list[RagChunk] = []
     legal_recursive_cache_info: dict[str, Any] = {}
     if any(method in LEGAL_RECURSIVE_RETRIEVERS for method in retrievers):
-        legal_recursive_chunks, legal_recursive_cache_info = load_or_build_legal_recursive_cache(
-            contracts=contracts,
-            sentence_lookup=sentence_lookup,
-            output_dir=output_dir,
-            chunking_version=legal_recursive_chunking_version,
-            rebuild=rebuild_chunks,
-            progress=progress,
+        legal_recursive_chunks, legal_recursive_cache_info = (
+            load_or_build_legal_recursive_cache(
+                contracts=contracts,
+                sentence_lookup=sentence_lookup,
+                output_dir=output_dir,
+                chunking_version=legal_recursive_chunking_version,
+                rebuild=rebuild_chunks,
+                progress=progress,
+            )
         )
 
     dense_retriever, dense_encoding_info = load_or_build_dense_sentence_encoder(
@@ -1139,14 +1213,16 @@ def run_rag_eval(
     dense_legal_retriever: SentenceRetriever | None = None
     dense_legal_encoding_info: dict[str, Any] = {}
     if "dense_legal_recursive" in retrievers:
-        dense_legal_retriever, dense_legal_encoding_info = load_or_build_dense_sentence_encoder(
-            chunks=legal_recursive_chunks,
-            method="dense_legal_recursive",
-            output_dir=output_dir,
-            chunking_version=legal_recursive_chunking_version,
-            embedding_model=embedding_model,
-            rebuild=rebuild_embeddings,
-            progress=progress,
+        dense_legal_retriever, dense_legal_encoding_info = (
+            load_or_build_dense_sentence_encoder(
+                chunks=legal_recursive_chunks,
+                method="dense_legal_recursive",
+                output_dir=output_dir,
+                chunking_version=legal_recursive_chunking_version,
+                embedding_model=embedding_model,
+                rebuild=rebuild_embeddings,
+                progress=progress,
+            )
         )
 
     records = eligibility_records(
@@ -1193,15 +1269,17 @@ def run_rag_eval(
         question_summary_records
     )
     chunking_match_distribution = summarize_chunk_matching_by_question(records)
-    chunking_summary_rows, chunking_documents, chunking_reviews = build_chunking_review_payload(
-        eval_rows=eval_rows,
-        records=records,
-        sentence_lookup=sentence_lookup,
-        contracts=contracts,
-        embedding_model=embedding_model,
-        chunking_version=chunking_version,
-        dense_encoding_info=dense_encoding_info,
-        enrichments=enrichments,
+    chunking_summary_rows, chunking_documents, chunking_reviews = (
+        build_chunking_review_payload(
+            eval_rows=eval_rows,
+            records=records,
+            sentence_lookup=sentence_lookup,
+            contracts=contracts,
+            embedding_model=embedding_model,
+            chunking_version=chunking_version,
+            dense_encoding_info=dense_encoding_info,
+            enrichments=enrichments,
+        )
     )
     chunking_versions: dict[str, dict[str, Any]] = {
         "sentence-v3": {
@@ -1218,15 +1296,19 @@ def run_rag_eval(
         lr_documents = build_legal_recursive_documents(
             legal_recursive_chunks, contracts, lr_review_doc_ids
         )
-        lr_summary_rows = [
-            {
-                **chunking_summary_rows[0],
-                "chunking_version": "legal-recursive-v1",
-                "review_contract_sentences": sum(
-                    len(d.get("sentences", [])) for d in lr_documents.values()
-                ),
-            }
-        ] if chunking_summary_rows else []
+        lr_summary_rows = (
+            [
+                {
+                    **chunking_summary_rows[0],
+                    "chunking_version": "legal-recursive-v1",
+                    "review_contract_sentences": sum(
+                        len(d.get("sentences", [])) for d in lr_documents.values()
+                    ),
+                }
+            ]
+            if chunking_summary_rows
+            else []
+        )
         lr_match_distribution = chunking_match_distribution
         lr_reviews = chunking_reviews
     else:
@@ -1254,7 +1336,9 @@ def run_rag_eval(
     write_csv(paths["gold_question_summary"], eligibility_question_summary)
     write_json(paths["gold_summary"], gold_summary)
     write_jsonl(paths["sentences"], [chunk.to_dict() for chunk in chunks])
-    write_csv(paths["query_enrichment_results"], compact_csv_rows(query_enrichment_rows))
+    write_csv(
+        paths["query_enrichment_results"], compact_csv_rows(query_enrichment_rows)
+    )
     write_csv(paths["query_enrichment_summary"], query_enrichment_summary)
 
     config = {
@@ -1399,7 +1483,10 @@ def run_rag_eval(
     emit_progress(progress, "Writing retrieval outputs")
     write_jsonl(paths["results_jsonl"], retrieval_rows)
     write_csv(paths["results_csv"], compact_csv_rows(retrieval_rows))
-    write_csv(paths["results_doc_question_summary"], compact_csv_rows(retrieval_doc_question_summary))
+    write_csv(
+        paths["results_doc_question_summary"],
+        compact_csv_rows(retrieval_doc_question_summary),
+    )
     write_csv(paths["ranking_summary"], ranking_summary)
 
     summary = {

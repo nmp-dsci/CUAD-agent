@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 
-def retrieved_sentence_ids_from_results(retrieved: list[Any], *, top_chunks: int) -> list[str]:
+def retrieved_sentence_ids_from_results(
+    retrieved: list[Any], *, top_chunks: int
+) -> list[str]:
     sentence_ids: list[str] = []
     seen: set[str] = set()
     for result in retrieved[:top_chunks]:
@@ -23,7 +25,9 @@ def coverage_by_top_chunks(
     top_chunks: int,
 ) -> dict[str, object]:
     gold = list(dict.fromkeys(gold_sentence_ids))
-    retrieved_ids = retrieved_sentence_ids_from_results(retrieved, top_chunks=top_chunks)
+    retrieved_ids = retrieved_sentence_ids_from_results(
+        retrieved, top_chunks=top_chunks
+    )
     retrieved_set = set(retrieved_ids)
     covered = [sentence_id for sentence_id in gold if sentence_id in retrieved_set]
     first_ranks: list[int] = []
@@ -43,7 +47,9 @@ def coverage_by_top_chunks(
     }
 
 
-def coverage_at_k(gold_sentence_ids: list[str], retrieved_sentence_ids: list[str], k: int) -> dict[str, object]:
+def coverage_at_k(
+    gold_sentence_ids: list[str], retrieved_sentence_ids: list[str], k: int
+) -> dict[str, object]:
     gold = list(dict.fromkeys(gold_sentence_ids))
     retrieved = retrieved_sentence_ids[:k]
     retrieved_set = set(retrieved)

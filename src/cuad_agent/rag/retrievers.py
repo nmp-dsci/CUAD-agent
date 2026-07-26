@@ -14,7 +14,9 @@ class SentenceRetriever:
     method: str
     index: BM25SentenceIndex | DenseSentenceIndex
 
-    def search(self, query: str, *, document_row_id: int, top_k: int) -> list[SearchResult]:
+    def search(
+        self, query: str, *, document_row_id: int, top_k: int
+    ) -> list[SearchResult]:
         return self.index.search(query, document_row_id=document_row_id, top_k=top_k)
 
 

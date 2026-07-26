@@ -6,7 +6,11 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
-from cuad_agent.rag.experiments import DEFAULT_CHUNKING_VERSION, DEFAULT_RETRIEVERS, run_rag_eval
+from cuad_agent.rag.experiments import (
+    DEFAULT_CHUNKING_VERSION,
+    DEFAULT_RETRIEVERS,
+    run_rag_eval,
+)
 
 
 def parse_int_list(value: str | None) -> list[int] | None:

@@ -16,7 +16,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from cuad_agent.data.sampling import evaluation_row_id
 from cuad_agent.rag.cache import slugify
-from cuad_agent.rag.coverage import coverage_by_top_chunks, retrieved_sentence_ids_from_results
+from cuad_agent.rag.coverage import (
+    coverage_by_top_chunks,
+    retrieved_sentence_ids_from_results,
+)
 from cuad_agent.rag.gold_answers import EligibilityRecord
 from cuad_agent.rag.indexes import SearchResult
 from cuad_agent.rag.retrievers import SentenceRetriever
@@ -51,7 +54,14 @@ LEGAL_KEYWORD_FALLBACKS: dict[str, list[str]] = {
         "successors and assigns",
     ],
     "governing law": ["governed by", "laws of", "jurisdiction", "venue"],
-    "audit rights": ["audit", "inspect", "books", "records", "accountant", "compliance"],
+    "audit rights": [
+        "audit",
+        "inspect",
+        "books",
+        "records",
+        "accountant",
+        "compliance",
+    ],
     "exclusivity": ["exclusive", "sole", "only", "not appoint", "not engage"],
     "license": ["license", "licensed", "non-transferable", "sublicense", "scope"],
 }
@@ -191,7 +201,9 @@ def offline_enrichment_terms(category: str, question: str, description: str) -> 
     if not terms:
         tokens = [
             token
-            for token in normalize_sentence_text(" ".join([category, description])).split()
+            for token in normalize_sentence_text(
+                " ".join([category, description])
+            ).split()
             if len(token) > 4
         ]
         terms.extend(tokens[:12])
@@ -231,7 +243,9 @@ def deepseek_enrichment_terms(
         f"Details: {category_description}"
     )
     response = requests.post(
-        os.environ.get("DEEPSEEK_API_BASE", "https://api.deepseek.com/chat/completions"),
+        os.environ.get(
+            "DEEPSEEK_API_BASE", "https://api.deepseek.com/chat/completions"
+        ),
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -239,7 +253,10 @@ def deepseek_enrichment_terms(
         json={
             "model": model,
             "messages": [
-                {"role": "system", "content": "You identify contract review search terms."},
+                {
+                    "role": "system",
+                    "content": "You identify contract review search terms.",
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0,
@@ -495,8 +512,10 @@ def run_query_enrichment_eval(
             "baseline_question_gold_similarity_max": baseline_similarity["max"],
             "enriched_question_gold_similarity_mean": enriched_similarity["mean"],
             "enriched_question_gold_similarity_max": enriched_similarity["max"],
-            "similarity_mean_delta": enriched_similarity["mean"] - baseline_similarity["mean"],
-            "similarity_max_delta": enriched_similarity["max"] - baseline_similarity["max"],
+            "similarity_mean_delta": enriched_similarity["mean"]
+            - baseline_similarity["mean"],
+            "similarity_max_delta": enriched_similarity["max"]
+            - baseline_similarity["max"],
             "enrichment_terms": enrichment.enrichment_terms if enrichment else "",
             "enrichment_status": enrichment.status if enrichment else "missing",
             "baseline_query": baseline_query,
@@ -534,22 +553,22 @@ def run_query_enrichment_eval(
             output[f"enriched_gold_sentence_coverage_at_{k}"] = enriched_coverage[k][
                 "gold_sentence_coverage"
             ]
-            output[f"coverage_delta_at_{k}"] = (
-                float(enriched_coverage[k]["gold_sentence_coverage"])
-                - float(baseline_coverage[k]["gold_sentence_coverage"])
-            )
+            output[f"coverage_delta_at_{k}"] = float(
+                enriched_coverage[k]["gold_sentence_coverage"]
+            ) - float(baseline_coverage[k]["gold_sentence_coverage"])
             output[f"baseline_hybrid_gold_sentence_coverage_at_{k}"] = (
                 baseline_hybrid_coverage[k]["gold_sentence_coverage"]
             )
             output[f"enriched_hybrid_gold_sentence_coverage_at_{k}"] = (
                 enriched_hybrid_coverage[k]["gold_sentence_coverage"]
             )
-            output[f"hybrid_coverage_delta_at_{k}"] = (
-                float(enriched_hybrid_coverage[k]["gold_sentence_coverage"])
-                - float(baseline_hybrid_coverage[k]["gold_sentence_coverage"])
-            )
+            output[f"hybrid_coverage_delta_at_{k}"] = float(
+                enriched_hybrid_coverage[k]["gold_sentence_coverage"]
+            ) - float(baseline_hybrid_coverage[k]["gold_sentence_coverage"])
         rows.append(output)
-        if progress is not None and (index == 1 or index % 25 == 0 or index == len(eligible_items)):
+        if progress is not None and (
+            index == 1 or index % 25 == 0 or index == len(eligible_items)
+        ):
             progress(f"Evaluated query enrichment row {index}/{len(eligible_items)}")
     summary = summarize_query_enrichment(rows, top_ks=top_ks)
     return rows, summary
@@ -573,14 +592,18 @@ def summarize_query_enrichment(
             "category": first["category"],
             "rows": len(question_rows),
             "baseline_similarity_mean": sum(
-                float(row["baseline_question_gold_similarity_mean"]) for row in question_rows
+                float(row["baseline_question_gold_similarity_mean"])
+                for row in question_rows
             )
             / len(question_rows),
             "enriched_similarity_mean": sum(
-                float(row["enriched_question_gold_similarity_mean"]) for row in question_rows
+                float(row["enriched_question_gold_similarity_mean"])
+                for row in question_rows
             )
             / len(question_rows),
-            "similarity_mean_delta": sum(float(row["similarity_mean_delta"]) for row in question_rows)
+            "similarity_mean_delta": sum(
+                float(row["similarity_mean_delta"]) for row in question_rows
+            )
             / len(question_rows),
         }
         for k in top_ks:
@@ -590,15 +613,15 @@ def summarize_query_enrichment(
             baseline_hybrid_key = f"baseline_hybrid_gold_sentence_coverage_at_{k}"
             enriched_hybrid_key = f"enriched_hybrid_gold_sentence_coverage_at_{k}"
             hybrid_delta_key = f"hybrid_coverage_delta_at_{k}"
-            output[baseline_key] = sum(float(row[baseline_key]) for row in question_rows) / len(
-                question_rows
-            )
-            output[enriched_key] = sum(float(row[enriched_key]) for row in question_rows) / len(
-                question_rows
-            )
-            output[delta_key] = sum(float(row[delta_key]) for row in question_rows) / len(
-                question_rows
-            )
+            output[baseline_key] = sum(
+                float(row[baseline_key]) for row in question_rows
+            ) / len(question_rows)
+            output[enriched_key] = sum(
+                float(row[enriched_key]) for row in question_rows
+            ) / len(question_rows)
+            output[delta_key] = sum(
+                float(row[delta_key]) for row in question_rows
+            ) / len(question_rows)
             output[baseline_hybrid_key] = sum(
                 float(row.get(baseline_hybrid_key, 0.0)) for row in question_rows
             ) / len(question_rows)

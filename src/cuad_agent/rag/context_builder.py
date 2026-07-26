@@ -82,11 +82,18 @@ def build_rag_context(
     context_text is chunks joined by "\\n\\n---\\n\\n".
     """
     # --- Dense retriever (required by both rag-dense and rag-hybrid) ---
-    dense_key = (output_dir.resolve(), "dense_sentence", chunking_version, embedding_model)
+    dense_key = (
+        output_dir.resolve(),
+        "dense_sentence",
+        chunking_version,
+        embedding_model,
+    )
     dense_retriever = _SENTENCE_RETRIEVER_CACHE.get(dense_key)
 
     if dense_retriever is None:
-        dense_pickle = index_cache_path(output_dir, "dense_sentence", chunking_version, embedding_model)
+        dense_pickle = index_cache_path(
+            output_dir, "dense_sentence", chunking_version, embedding_model
+        )
         cached = load_pickle(dense_pickle)
         if isinstance(cached, SentenceRetriever):
             dense_retriever = cached
@@ -115,13 +122,20 @@ def build_rag_context(
             rebuild=False,
         )
 
-    dense_results = dense_retriever.search(query, document_row_id=document_row_id, top_k=top_k)
+    dense_results = dense_retriever.search(
+        query, document_row_id=document_row_id, top_k=top_k
+    )
 
     if method == "rag-dense":
         results = dense_results
     else:
         # --- BM25 retriever (hybrid only) ---
-        bm25_key = (output_dir.resolve(), "bm25_sentence", chunking_version, embedding_model)
+        bm25_key = (
+            output_dir.resolve(),
+            "bm25_sentence",
+            chunking_version,
+            embedding_model,
+        )
         bm25_retriever = _SENTENCE_RETRIEVER_CACHE.get(bm25_key)
 
         if bm25_retriever is None:
@@ -156,7 +170,9 @@ def build_rag_context(
                 rebuild=False,
             )
 
-        bm25_results = bm25_retriever.search(query, document_row_id=document_row_id, top_k=top_k)
+        bm25_results = bm25_retriever.search(
+            query, document_row_id=document_row_id, top_k=top_k
+        )
         results = hybrid_fuse_results(dense_results, bm25_results, top_k=top_k)
 
     chunk_ids = [result.chunk.chunk_id for result in results]
@@ -221,4 +237,6 @@ def build_hierarchical_rag_context(
         _HIERARCHICAL_CONTEXT_CACHE[cache_key] = h_retriever
 
     results = h_retriever.search(query, document_row_id=document_row_id, top_k=top_k)
-    return format_hierarchical_context(results), [result.chunk.chunk_id for result in results]
+    return format_hierarchical_context(results), [
+        result.chunk.chunk_id for result in results
+    ]

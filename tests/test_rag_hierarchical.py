@@ -89,7 +89,9 @@ def test_hierarchical_retriever_expands_full_clause_when_siblings_rank_low() -> 
         span(1, 0, "Assignment requires consent.", clause_path=["2", "Assignment"]),
         span(1, 1, "This approval must be written.", clause_path=["2", "Assignment"]),
         span(1, 2, "The transfer is void otherwise.", clause_path=["2", "Assignment"]),
-        span(1, 3, "No delegation releases liability.", clause_path=["2", "Assignment"]),
+        span(
+            1, 3, "No delegation releases liability.", clause_path=["2", "Assignment"]
+        ),
         span(1, 4, "Assignment appears in another clause.", clause_path=["5", "Other"]),
     ]
     chunks = chunks_from_sentences(spans)

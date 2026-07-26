@@ -75,7 +75,9 @@ def chunk_from_dict(row: dict[str, object]) -> RagChunk:
             int(row["page_number"]) if row.get("page_number") is not None else None
         ),
         section_number=(
-            str(row["section_number"]) if row.get("section_number") is not None else None
+            str(row["section_number"])
+            if row.get("section_number") is not None
+            else None
         ),
         section_title=(
             str(row["section_title"]) if row.get("section_title") is not None else None

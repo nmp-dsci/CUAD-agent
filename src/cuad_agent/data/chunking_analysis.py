@@ -12,6 +12,7 @@ import pandas as pd
 
 try:
     from unstructured.partition.text import partition_text as _partition_text  # type: ignore[import]
+
     _HAS_UNSTRUCTURED = True
 except ImportError:
     _HAS_UNSTRUCTURED = False
@@ -21,11 +22,12 @@ except ImportError:
 # Hierarchy pattern definitions
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class HierarchyPattern:
     name: str
     label: str
-    level: int        # 0=doc-root, 1=major, 2=section, 3=subsection, 4=item, 5=sub-item
+    level: int  # 0=doc-root, 1=major, 2=section, 3=subsection, 4=item, 5=sub-item
     css_class: str
     description: str
     example: str
@@ -40,7 +42,9 @@ HIERARCHY_PATTERNS: list[HierarchyPattern] = [
         css_class="hl-exhibit",
         description="SEC filing exhibit/schedule marker at document root.",
         example="EXHIBIT 10.6 · Exhibit 10.26 · Schedule A",
-        regex=re.compile(r"^(?:EXHIBIT|Exhibit|SCHEDULE|Schedule|ANNEX|Annex)\s+[\d.\w]"),
+        regex=re.compile(
+            r"^(?:EXHIBIT|Exhibit|SCHEDULE|Schedule|ANNEX|Annex)\s+[\d.\w]"
+        ),
     ),
     HierarchyPattern(
         name="article",
@@ -172,6 +176,7 @@ def _extract_prefix(stripped: str) -> str | None:
 # Unstructured integration (optional — used for independent label comparison)
 # ---------------------------------------------------------------------------
 
+
 def _unstructured_line_labels(lines: list[str]) -> dict[int, str]:
     """Map 0-based line index → unstructured element type (Title/ListItem/NarrativeText/…)."""
     text = "\n".join(lines)
@@ -265,11 +270,15 @@ def annotate_contract(document_row_id: int, title: str, text: str) -> dict[str, 
         annotated.append(entry)
 
     word_coverage = round(classified_words / total_words * 100, 1) if total_words else 0
-    line_coverage = round(classified_lines / total_nonempty * 100, 1) if total_nonempty else 0
+    line_coverage = (
+        round(classified_lines / total_nonempty * 100, 1) if total_nonempty else 0
+    )
     top_prefixes = sorted(prefix_counts.items(), key=lambda x: -x[1])[:25]
 
     first = all_lines[0].strip() if all_lines else ""
-    exhibit_match = re.match(r"^(?:EXHIBIT|Exhibit|exhibit|SCHEDULE|Schedule)\s+[\d.]+", first)
+    exhibit_match = re.match(
+        r"^(?:EXHIBIT|Exhibit|exhibit|SCHEDULE|Schedule)\s+[\d.]+", first
+    )
 
     return {
         "id": document_row_id,
@@ -306,15 +315,15 @@ _CSS_COLORS = """
 """
 
 _LEVEL_COLORS = {
-    "hl-exhibit":    "var(--c-exhibit)",
-    "hl-article":    "var(--c-article)",
-    "hl-whereas":    "var(--c-whereas)",
-    "hl-allcaps":    "var(--c-allcaps)",
-    "hl-section":    "var(--c-section)",
+    "hl-exhibit": "var(--c-exhibit)",
+    "hl-article": "var(--c-article)",
+    "hl-whereas": "var(--c-whereas)",
+    "hl-allcaps": "var(--c-allcaps)",
+    "hl-section": "var(--c-section)",
     "hl-subsection": "var(--c-subsection)",
-    "hl-item":       "var(--c-item)",
+    "hl-item": "var(--c-item)",
     "hl-item-upper": "var(--c-item-upper)",
-    "hl-subitem":    "var(--c-subitem)",
+    "hl-subitem": "var(--c-subitem)",
 }
 
 
@@ -386,30 +395,66 @@ def _tool_table_html() -> str:
 
 def _enhanced_regex_html() -> str:
     patterns = [
-        ("Exhibit header", r"^(?:EXHIBIT|Exhibit|SCHEDULE|Schedule|ANNEX|Annex)\\s+[\\d.\\w]",
-         "Not in clauses.py — strips SEC exhibit prefix before chunking"),
-        ("ARTICLE (Roman)", r"^(?:ARTICLE|Article)\\s+(?:[IVXLCDM]+|\\d+)",
-         "clauses.py catches this via SECTION_RE fallback"),
-        ("Section keyword", r"^(?:SECTION|Section)\\s+\\d+(?:\\.\\d+)*(?:\\([a-z]\\))?\\.?\\s+\\S",
-         "clauses.py SECTION_RE — works"),
-        ("Top-level N.", r"^\\d+\\.\\s+[A-Z]",
-         "Not in clauses.py — missed single-integer sections"),
-        ("Subsection N.N", r"^\\d+\\.\\d+",
-         "Caught by clauses.py SECTION_RE number group \\d+(?:\\.\\d+)*"),
-        ("ALL CAPS heading", r"short line, upper() == stripped, len ≤ 80",
-         "clauses.py detects this as section_title with number=None"),
-        ("(a) alpha paren", r"^\\([a-zA-Z]\\)\\s+\\S",
-         "Not in clauses.py — missed list items"),
-        ("(i) roman paren", r"^\\([ivxlIVXL]+\\)\\s+\\S",
-         "Not in clauses.py — missed sub-list items"),
-        ("(1) numeric paren", r"^\\(\\d+\\)\\s+\\S",
-         "Not in clauses.py — missed numeric list items"),
-        ("a) bare letter", r"^[a-z]\\)\\s+\\S",
-         "Not in clauses.py — missed bare-letter list items"),
-        ("WHEREAS / RECITALS", r"^(?:RECITALS?|WITNESSETH|WHEREAS|NOW,?\\s+THEREFORE)\\b",
-         "Partially caught as ALL CAPS heading"),
-        ("Indentation depth", "count leading spaces / 4",
-         "Not tracked anywhere — would improve hierarchical retrieval accuracy"),
+        (
+            "Exhibit header",
+            r"^(?:EXHIBIT|Exhibit|SCHEDULE|Schedule|ANNEX|Annex)\\s+[\\d.\\w]",
+            "Not in clauses.py — strips SEC exhibit prefix before chunking",
+        ),
+        (
+            "ARTICLE (Roman)",
+            r"^(?:ARTICLE|Article)\\s+(?:[IVXLCDM]+|\\d+)",
+            "clauses.py catches this via SECTION_RE fallback",
+        ),
+        (
+            "Section keyword",
+            r"^(?:SECTION|Section)\\s+\\d+(?:\\.\\d+)*(?:\\([a-z]\\))?\\.?\\s+\\S",
+            "clauses.py SECTION_RE — works",
+        ),
+        (
+            "Top-level N.",
+            r"^\\d+\\.\\s+[A-Z]",
+            "Not in clauses.py — missed single-integer sections",
+        ),
+        (
+            "Subsection N.N",
+            r"^\\d+\\.\\d+",
+            "Caught by clauses.py SECTION_RE number group \\d+(?:\\.\\d+)*",
+        ),
+        (
+            "ALL CAPS heading",
+            r"short line, upper() == stripped, len ≤ 80",
+            "clauses.py detects this as section_title with number=None",
+        ),
+        (
+            "(a) alpha paren",
+            r"^\\([a-zA-Z]\\)\\s+\\S",
+            "Not in clauses.py — missed list items",
+        ),
+        (
+            "(i) roman paren",
+            r"^\\([ivxlIVXL]+\\)\\s+\\S",
+            "Not in clauses.py — missed sub-list items",
+        ),
+        (
+            "(1) numeric paren",
+            r"^\\(\\d+\\)\\s+\\S",
+            "Not in clauses.py — missed numeric list items",
+        ),
+        (
+            "a) bare letter",
+            r"^[a-z]\\)\\s+\\S",
+            "Not in clauses.py — missed bare-letter list items",
+        ),
+        (
+            "WHEREAS / RECITALS",
+            r"^(?:RECITALS?|WITNESSETH|WHEREAS|NOW,?\\s+THEREFORE)\\b",
+            "Partially caught as ALL CAPS heading",
+        ),
+        (
+            "Indentation depth",
+            "count leading spaces / 4",
+            "Not tracked anywhere — would improve hierarchical retrieval accuracy",
+        ),
     ]
     rows = "".join(
         f"<tr><td><code>{p[0]}</code></td><td><code>{p[1]}</code></td><td>{p[2]}</td></tr>"
@@ -434,7 +479,9 @@ def write_chunking_analysis_html(
     annotated = []
     for row in sample.itertuples(index=False):
         text = getattr(row, "context", "") or ""
-        annotated.append(annotate_contract(int(row.document_row_id), str(row.title), text))
+        annotated.append(
+            annotate_contract(int(row.document_row_id), str(row.title), text)
+        )
 
     exhibit_count = sum(1 for a in annotated if a["starts_with_exhibit"])
     payload = json.dumps(
