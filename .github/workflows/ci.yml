@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# NOTE: a ruff lint + format gate is intentionally deferred to a follow-up
+# cleanup PR. On current main `ruff check .`/`ruff format --check .` fail on
+# pre-existing style debt (12 lint errors, 27 unformatted files); turning the
+# gate on here would require reformatting files that overlap active in-flight
+# work on feature/autoresearch. The offline test suite is enforced now; lint
+# lands once the cleanup can be committed without collision.
+
+jobs:
+  test:
+    name: Test — pytest (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # requires-python is ">=3.12,<3.14" and no .python-version is committed.
+      # Pin sync to 3.12 so uv does not nondeterministically pick 3.13.
+      - name: Install Python and dependencies
+        run: |
+          uv python install 3.12
+          uv sync --python 3.12
+      # Scope to tests/ so the vendored opensrc/ upstream suite is never
+      # collected. Every test runs fully offline: dry_run=True / llm=None /
+      # offline query-enrichment / tfidf embeddings — no API key, network call,
+      # model download, or DB required. Verified: 9 files / 66 tests pass in a
+      # clean, key-free, offline venv. (First run installs the full locked dep
+      # set incl. torch/transformers, so it is slow but green.)
+      - name: pytest
+        run: uv run pytest tests/
+      # Coverage gate omitted: pytest-cov is not a dependency on main.
+      # TODO(eval-gate): no committed offline eval/regression snapshot test exists
+      # yet (cf. transcript-rag-agent tests/evals/test_committed_runs.py).
+      # TODO(lint): add ruff check + ruff format --check (via uvx ruff@0.14.2)
+      # once the cleanup can be committed (see PR note above).
