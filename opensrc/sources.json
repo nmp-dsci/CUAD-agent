@@ -1,6 +1,7 @@
 [
   { "repo": "langchain-ai/langchain", "version": "1.0.7" },
+  { "repo": "langchain-ai/deepagents", "version": "0.6.8" },
   { "repo": "pydantic/pydantic", "version": "2.12.5" },
-  { "repo": "stanfordnlp/dspy", "version": "3.2.1" }
-  
+  { "repo": "stanfordnlp/dspy", "version": "3.2.1" },
+  { "repo": "karpathy/autoresearch", "version": "" }
 ]

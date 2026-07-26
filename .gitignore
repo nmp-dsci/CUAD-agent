@@ -12,3 +12,4 @@ frontend/rag_pipeline_eval.html
 .dspy_cache/
 opensrc/*/
 !opensrc/sources.json
+.claude/scheduled_tasks.lock

@@ -78,9 +78,6 @@
     .mid { color: #ffd479; font-weight: 700; }
     .bad { color: #ffb4bd; font-weight: 700; }
     .best { box-shadow: inset 3px 0 0 var(--green); }
-    .row-winner { background: rgba(0, 168, 132, 0.15); box-shadow: inset 0 0 0 1px rgba(0,168,132,0.4); }
-    .q-label { font-size: 11px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .f1-table th.num { min-width: 72px; }
   </style>
 </head>
 <body>
@@ -195,7 +192,7 @@
       const f1Best = bestIndex(data.models.map(m => m.mean_f1));
       const naBest = bestIndex(data.models.map(m => m.no_answer_detection_accuracy));
       const ansBest = bestIndex(data.models.map(m => m.answer_detection_accuracy));
-      const summaryRows = data.models.map((m, i) => `
+      const rows = data.models.map((m, i) => `
         <tr>
           <td class="model-name">${m.evaluation_href ? `<a href="${esc(m.evaluation_href)}">${esc(m.label)}</a>` : esc(m.label)}<br><span class="pill">${esc(m.context_mode || m.model_id)}</span></td>
           <td class="num">${m.total}</td>
@@ -206,22 +203,6 @@
           <td class="num">${scored(m.detection_accuracy)}</td>
         </tr>
       `).join('');
-
-      // Per-question F1 matrix: rows = questions, columns = models
-      const modelHeaders = data.models.map(m => `<th class="num">${esc(m.label)}</th>`).join('');
-      const matrixRows = data.categories.map(cat => {
-        const qi = cat.question_index;
-        const f1s = data.models.map(m => {
-          const pc = m.per_category[qi] ?? m.per_category[String(qi)] ?? {};
-          return pc.mean_f1 !== undefined ? pc.mean_f1 : null;
-        });
-        const rowBest = bestIndex(f1s);
-        const cells = f1s.map((v, i) =>
-          `<td class="num${i === rowBest ? ' row-winner' : ''}">${scored(v)}</td>`
-        ).join('');
-        return `<tr><td class="q-label" title="${esc(cat.category)}">${qi + 1}. ${esc(cat.category)}</td>${cells}</tr>`;
-      }).join('');
-
       const first = data.models[0] || {};
       messagesEl.innerHTML = `
         <article class="message incoming">
@@ -235,24 +216,12 @@
                 <th>Model</th><th class="num">Examples</th><th class="num">Mean F1</th><th class="num">Correct@0.5</th>
                 <th class="num">No-answer acc</th><th class="num">Answer acc</th><th class="num">Detection acc</th>
               </tr></thead>
-              <tbody>${summaryRows}</tbody>
+              <tbody>${rows}</tbody>
             </table>
           </div>
           <p class="legend">No-answer acc = share of gold "no answer" rows the model correctly flagged absent.
           Answer acc = share of gold answer rows the model correctly identified as present.
           Detection acc = overall present/absent classification accuracy. Green outline marks the best model per column.</p>
-        </article>
-        <article class="message incoming">
-          <h2>Mean F1 by question</h2>
-          <p>Each row is one CUAD question category. F1 is color-coded
-          (<span class="good">green ≥ 75</span> · <span class="mid">yellow ≥ 50</span> · <span class="bad">red &lt; 50</span>).
-          The highest-scoring model per row is highlighted.</p>
-          <div class="table-wrap">
-            <table class="f1-table">
-              <thead><tr><th>Question</th>${modelHeaders}</tr></thead>
-              <tbody>${matrixRows}</tbody>
-            </table>
-          </div>
         </article>
       `;
     }

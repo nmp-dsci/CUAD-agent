@@ -19,7 +19,7 @@ NO_ANSWER_MARKERS = {
     "noanswer",
 }
 
-OUTPUT_STEM = "cuad_dspy_eval"
+OUTPUT_STEM = "cuad_langchain_eval"
 
 __all__ = [
     "EVAL_QUESTION_COUNT",

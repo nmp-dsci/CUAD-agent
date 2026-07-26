@@ -32,23 +32,21 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
 
-from cuad_agent.agents.langchain_agent import (
+from cuad_agent.agents.langchain_agent import (  # re-exported for back-compat
     ContractQuestionAgent,
     CuadAnswer,
     build_agents,
+    build_chain_for_agent,  # noqa: F401
     configure_llm,
     make_messages_with_hint,
-    parse_cuad_answer,
-)
-from cuad_agent.agents.langchain_agent import (  # re-exported for back-compat
-    build_chain_for_agent,  # noqa: F401
     message_text,  # noqa: F401
+    parse_cuad_answer,
 )
 from cuad_agent.constants import NO_ANSWER
 from cuad_agent.dashboards.evaluation import write_evaluation_html
 from cuad_agent.dashboards.model_comparison import write_model_comparison_html
-from cuad_agent.eval.examples import answer_texts, evaluation_row_id
 from cuad_agent.data.sampling import select_evaluation_set
+from cuad_agent.eval.examples import answer_texts, evaluation_row_id
 from cuad_agent.eval.metrics import token_overlap_f1
 from cuad_agent.eval.summary import summarize_results
 from cuad_agent.evaluators.cli_common import (
@@ -98,7 +96,7 @@ RESULT_REQUIRED_COLUMNS = {
     "is_impossible",
     "answers_len",
 }
-RESULT_JSONL_NAME = "cuad_dspy_eval_results.jsonl"
+RESULT_JSONL_NAME = "cuad_langchain_eval_results.jsonl"
 
 
 def resolve_prompt_harness_paths(args: argparse.Namespace) -> None:
@@ -135,8 +133,9 @@ def _apply_rag_context_to_devset(
     hierarchical_leaf_k: int = 50,
     hierarchical_top_sections: int = 5,
 ) -> list[dict[str, Any]]:
-    from cuad_agent.rag.query_enrichment import query_for_row
     import types
+
+    from cuad_agent.rag.query_enrichment import query_for_row
 
     print(
         f"[RAG] Replacing contract_text with {context_mode} context "
@@ -450,7 +449,7 @@ def build_baseline_comparison(
     return {
         "baseline_results_path": str(baseline_results_path),
         "baseline_model_id": baseline_model_id,
-        "matched_examples": int(len(joined)),
+        "matched_examples": len(joined),
         "baseline_mean_token_f1": float(joined["baseline_token_f1"].mean() * 100),
         "candidate_mean_token_f1": float(joined["token_f1"].mean() * 100),
         "mean_token_f1_delta": float(joined["token_f1_delta"].mean() * 100),
@@ -839,7 +838,7 @@ def print_variant_table(df: pd.DataFrame) -> None:
         f1_str = f"{float(row.token_f1):.2f}"
         correct_str = str(bool(row.correct_at_0_5))
         print(
-            f"{str(row.variant_name):<{col_variant}} | {f1_str:^{col_f1}} | "
+            f"{row.variant_name!s:<{col_variant}} | {f1_str:^{col_f1}} | "
             f"{correct_str:^{col_correct}} | {pred_preview}"
         )
 
@@ -892,6 +891,9 @@ def run_full_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         dry_run=args.dry_run,
         prompt_overrides=prompt_overrides,
     )
+    if getattr(args, "question_index", None) is not None:
+        agents = {k: v for k, v in agents.items() if k == args.question_index}
+        eval_rows = eval_rows[eval_rows["question_index"] == args.question_index].copy()
     devset = build_devset(contract_lookup, eval_rows)
     paths = output_paths(args.output_dir, args.model_id, args.html_output)
     jsonl_results_path = paths["model_dir"] / RESULT_JSONL_NAME
