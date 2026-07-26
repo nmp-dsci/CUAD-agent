@@ -4,44 +4,6 @@ Experiment in building and evaluating a legal AI agent on the [CUAD](https://www
 
 ---
 
-
-## Source code reference
-
-Dependency source code is available locally in `opensrc/` for deeper understanding of implementation details. Use it when you need to understand how a package works internally — not just its types or public interface.
-
-`opensrc/sources.json` is the committed manifest of pinned packages. The fetched source trees are gitignored and must be restored locally.
-
-**Setup (run once after cloning, or after adding packages):**
-
-```bash
-./opensrc/setup_opensrc.sh
-```
-
-The script:
-1. Installs the `opensrc` CLI via `npm install -g opensrc` if not already present
-2. Creates `opensrc/` if the folder doesn't exist
-3. Creates `opensrc/sources.json` (empty manifest) if it doesn't exist
-4. Reads `sources.json` and fetches any packages not already present in `opensrc/`
-
-**Adding a package:**
-
-```bash
-# 1. Append to opensrc/sources.json
-# 2. Re-run setup
-./setup_opensrc.sh
-```
-
-**Removing a package:**
-
-```bash
-# 1. Delete its entry from opensrc/sources.json
-# 2. Delete the folder
-rm -rf opensrc/<repo-name>/
-```
-
-See `opensrc/sources.json` for the current manifest. When reading implementation details, reference files under `opensrc/` directly (e.g. `opensrc/langchain/libs/langchain/...`).
-
-
 ## Project layout
 
 ```
