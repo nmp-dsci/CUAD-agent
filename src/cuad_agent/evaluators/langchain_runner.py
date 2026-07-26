@@ -23,42 +23,48 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import os
 import threading
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from dotenv import load_dotenv
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.runnables import Runnable, RunnableLambda
-from pydantic import BaseModel, Field
 
-from cuad_agent.constants import EVAL_QUESTION_INDICES, NO_ANSWER, NO_ANSWER_MARKERS
+from cuad_agent.agents.langchain_agent import (  # re-exported for back-compat
+    ContractQuestionAgent,
+    CuadAnswer,
+    build_agents,
+    build_chain_for_agent,  # noqa: F401
+    configure_llm,
+    make_messages_with_hint,
+    message_text,  # noqa: F401
+    parse_cuad_answer,
+)
+from cuad_agent.constants import NO_ANSWER
 from cuad_agent.dashboards.evaluation import write_evaluation_html
 from cuad_agent.dashboards.model_comparison import write_model_comparison_html
-from cuad_agent.eval.examples import answer_texts, evaluation_row_id
 from cuad_agent.data.sampling import select_evaluation_set
+from cuad_agent.eval.examples import answer_texts, evaluation_row_id
 from cuad_agent.eval.metrics import token_overlap_f1
 from cuad_agent.eval.summary import summarize_results
+from cuad_agent.evaluators.cli_common import (
+    add_common_eval_args,
+    add_rag_context_args,
+    resolve_rag_context_for_row,
+)
 from cuad_agent.paths import output_paths, prompt_name_part, resolve_model_id
 from cuad_agent.prompts.loader import load_prompt_overrides, resolve_prompts_file
-from cuad_agent.prompts.templates import compose_system_prompt
-from cuad_agent.rag.cache import DEFAULT_EMBEDDING_MODEL
 from cuad_agent.rag.context_builder import (
     build_hierarchical_rag_context,
     build_rag_context,
 )
-from cuad_agent.rag.experiments import DEFAULT_CHUNKING_VERSION
 from cuad_agent.rag.query_enrichment import (
-    RAG_DEFAULT_TOP_K,
     build_question_enrichments,
     query_for_row,
     save_enriched_question_files,
 )
-
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 _DEFAULT_SINGLE_Q_MODEL_ID = "s6"
@@ -90,208 +96,7 @@ RESULT_REQUIRED_COLUMNS = {
     "is_impossible",
     "answers_len",
 }
-RESULT_JSONL_NAME = "cuad_dspy_eval_results.jsonl"
-
-
-class CuadAnswer(BaseModel):
-    """Structured output schema for CUAD clause extraction."""
-
-    reasoning: str = Field(
-        description=(
-            "Brief step-by-step reasoning that identifies the supporting "
-            "clause(s) in the contract before producing the final answer."
-        )
-    )
-    answer: str = Field(
-        description=(
-            "Exact answer text span(s) from the contract, separated by "
-            "newlines if multiple; or NO_ANSWER if no supporting clause exists."
-        )
-    )
-    marked_impossible: bool = Field(
-        description=(
-            "True only when the contract does not contain an answer for this "
-            "category/question; otherwise false."
-        )
-    )
-
-
-def build_chain_for_agent(llm: BaseChatModel, system_prompt: str) -> Runnable:
-    """Build a per-category chain that turns input fields into a typed CuadAnswer.
-
-    Uses a PydanticOutputParser instead of `with_structured_output()` because the
-    latter defaults to OpenAI tool calling, which DeepSeek's reasoner endpoints
-    (e.g. deepseek-v4-flash) reject. The parser approach embeds the JSON schema
-    in the system prompt and validates the response client-side, so it works on
-    any chat model regardless of tool/function-calling support.
-
-    Messages are constructed manually instead of via ChatPromptTemplate so that
-    contract text containing literal curly braces does not break f-string-style
-    template substitution.
-    """
-    parser = PydanticOutputParser(pydantic_object=CuadAnswer)
-    full_system = f"{system_prompt}\n\n{parser.get_format_instructions()}"
-
-    def make_messages(inputs: dict[str, Any]) -> list[Any]:
-        user_content = (
-            f"Contract title:\n{inputs['contract_title']}\n\n"
-            f"Contract text:\n{inputs['contract_text']}\n\n"
-            f"Category:\n{inputs['category']}\n\n"
-            f"Category description:\n{inputs['category_description']}\n\n"
-            f"Answer format:\n{inputs['answer_format']}"
-        )
-        return [
-            SystemMessage(content=full_system),
-            HumanMessage(content=user_content),
-        ]
-
-    return RunnableLambda(make_messages) | llm
-
-
-def message_text(output: Any) -> str:
-    content = getattr(output, "content", output)
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for part in content:
-            if isinstance(part, str):
-                parts.append(part)
-            elif isinstance(part, dict) and isinstance(part.get("text"), str):
-                parts.append(part["text"])
-        return "\n".join(parts)
-    return str(content)
-
-
-def parse_cuad_answer(output: Any) -> CuadAnswer:
-    text = message_text(output).strip()
-    parser = PydanticOutputParser(pydantic_object=CuadAnswer)
-    try:
-        return parser.parse(text)
-    except Exception:
-        normalized = text.strip().lower()
-        marked_impossible = normalized in NO_ANSWER_MARKERS
-        return CuadAnswer(
-            reasoning="unstructured_model_output",
-            answer=NO_ANSWER if marked_impossible else text,
-            marked_impossible=marked_impossible,
-        )
-
-
-class ContractQuestionAgent:
-    """One per-category agent wrapping a LangChain chain."""
-
-    def __init__(
-        self,
-        *,
-        question_index: int,
-        category: str,
-        question: str,
-        category_description: str,
-        answer_format: str,
-        system_prompt: str,
-        chain: Runnable | None,
-        dry_run: bool,
-    ) -> None:
-        self.question_index = question_index
-        self.category = category
-        self.question = question
-        self.category_description = category_description
-        self.answer_format = answer_format
-        self.system_prompt = system_prompt
-        self.chain = chain
-        self.dry_run = dry_run
-
-    def _dry_run_prediction(self, gold_answers: list[str]) -> CuadAnswer:
-        return CuadAnswer(
-            reasoning="dry_run",
-            answer="\n".join(gold_answers) if gold_answers else NO_ANSWER,
-            marked_impossible=not bool(gold_answers),
-        )
-
-    def predict_batch(
-        self,
-        examples: list[dict[str, Any]],
-        *,
-        max_concurrency: int = 4,
-    ) -> list[CuadAnswer]:
-        if self.dry_run:
-            return [self._dry_run_prediction(ex["gold_answers"]) for ex in examples]
-        if self.chain is None:
-            raise RuntimeError("LangChain chain not configured for non-dry-run agent")
-        chain_inputs = [
-            {
-                "contract_title": ex["contract_title"],
-                "contract_text": ex["contract_text"],
-                "category": self.category,
-                "category_description": self.category_description,
-                "answer_format": self.answer_format,
-            }
-            for ex in examples
-        ]
-        raw_outputs = self.chain.batch(
-            chain_inputs,
-            config={"max_concurrency": max_concurrency},
-        )
-        return [parse_cuad_answer(output) for output in raw_outputs]
-
-
-def build_agents(
-    questions_df: pd.DataFrame,
-    *,
-    llm: BaseChatModel | None,
-    dry_run: bool = False,
-    prompt_overrides: dict[str, str] | None = None,
-) -> dict[int, ContractQuestionAgent]:
-    categories = (
-        questions_df[
-            [
-                "question_index",
-                "category",
-                "question",
-                "category_description",
-                "answer_format",
-            ]
-        ]
-        .drop_duplicates("question_index")
-        .sort_values("question_index")
-    )
-    if categories.empty:
-        raise ValueError("No categories found for agent construction")
-
-    agents: dict[int, ContractQuestionAgent] = {}
-    prompt_overrides = prompt_overrides or {}
-    for row in categories.itertuples(index=False):
-        question_index = int(row.question_index)
-        if question_index not in EVAL_QUESTION_INDICES:
-            raise ValueError(f"Unexpected question_index={question_index}")
-        category = str(row.category)
-        question = str(row.question)
-        answer_format = "" if pd.isna(row.answer_format) else str(row.answer_format)
-        category_description = str(row.category_description)
-
-        system_prompt = prompt_overrides.get(category) or compose_system_prompt(
-            question=question,
-            category=category,
-            category_description=category_description,
-            answer_format=answer_format,
-        )
-
-        chain: Runnable | None = None
-        if not dry_run and llm is not None:
-            chain = build_chain_for_agent(llm, system_prompt)
-
-        agents[question_index] = ContractQuestionAgent(
-            question_index=question_index,
-            category=category,
-            question=question,
-            category_description=category_description,
-            answer_format=answer_format,
-            system_prompt=system_prompt,
-            chain=chain,
-            dry_run=dry_run,
-        )
-    return agents
+RESULT_JSONL_NAME = "cuad_langchain_eval_results.jsonl"
 
 
 def resolve_prompt_harness_paths(args: argparse.Namespace) -> None:
@@ -328,8 +133,9 @@ def _apply_rag_context_to_devset(
     hierarchical_leaf_k: int = 50,
     hierarchical_top_sections: int = 5,
 ) -> list[dict[str, Any]]:
-    from cuad_agent.rag.query_enrichment import query_for_row
     import types
+
+    from cuad_agent.rag.query_enrichment import query_for_row
 
     print(
         f"[RAG] Replacing contract_text with {context_mode} context "
@@ -345,28 +151,17 @@ def _apply_rag_context_to_devset(
             question=ex["question"],
         )
         query = query_for_row(row_obj)
-        if context_mode in {"rag-hierarchical-bm25", "rag-hierarchical-dense"}:
-            rag_context, _ = build_hierarchical_rag_context(
-                document_row_id=ex["document_row_id"],
-                query=query,
-                method=context_mode,  # type: ignore[arg-type]
-                leaf_k=hierarchical_leaf_k,
-                top_sections=hierarchical_top_sections,
-                top_k=top_k,
-                output_dir=output_dir,
-                chunking_version=chunking_version,
-                embedding_model=embedding_model,
-            )
-        else:
-            rag_context, _ = build_rag_context(
-                document_row_id=ex["document_row_id"],
-                query=query,
-                method=context_mode,  # type: ignore[arg-type]
-                top_k=top_k,
-                output_dir=output_dir,
-                chunking_version=chunking_version,
-                embedding_model=embedding_model,
-            )
+        rag_context = resolve_rag_context_for_row(
+            document_row_id=ex["document_row_id"],
+            query=query,
+            context_mode=context_mode,
+            top_k=top_k,
+            output_dir=output_dir,
+            chunking_version=chunking_version,
+            embedding_model=embedding_model,
+            hierarchical_leaf_k=hierarchical_leaf_k,
+            hierarchical_top_sections=hierarchical_top_sections,
+        )
         updated.append({**ex, "contract_text": rag_context})
         if index == 1 or index % 50 == 0 or index == total:
             print(
@@ -654,7 +449,7 @@ def build_baseline_comparison(
     return {
         "baseline_results_path": str(baseline_results_path),
         "baseline_model_id": baseline_model_id,
-        "matched_examples": int(len(joined)),
+        "matched_examples": len(joined),
         "baseline_mean_token_f1": float(joined["baseline_token_f1"].mean() * 100),
         "candidate_mean_token_f1": float(joined["token_f1"].mean() * 100),
         "mean_token_f1_delta": float(joined["token_f1_delta"].mean() * 100),
@@ -694,54 +489,6 @@ def build_baseline_comparison(
             for row in joined.itertuples(index=False)
         ],
     }
-
-
-def configure_llm(args: argparse.Namespace) -> BaseChatModel:
-    load_dotenv(Path.home() / ".env")
-    model_name = args.model
-
-    if model_name.startswith("deepseek/") or model_name.startswith("deepseek-"):
-        try:
-            from langchain_deepseek import ChatDeepSeek
-        except ImportError as exc:
-            raise RuntimeError(
-                "langchain-deepseek is required for DeepSeek models. "
-                "Install with: uv add langchain-deepseek"
-            ) from exc
-        api_key = os.environ.get("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise RuntimeError("DEEPSEEK_API_KEY is required for DeepSeek models")
-        actual_name = model_name.removeprefix("deepseek/")
-        return ChatDeepSeek(
-            model=actual_name,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-            api_key=api_key,
-        )
-
-    if model_name.startswith("openai/"):
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError as exc:
-            raise RuntimeError(
-                "langchain-openai is required for OpenAI models. "
-                "Install with: uv add langchain-openai"
-            ) from exc
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for OpenAI models")
-        actual_name = model_name.removeprefix("openai/")
-        return ChatOpenAI(
-            model=actual_name,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-            api_key=api_key,
-        )
-
-    raise RuntimeError(
-        f"Unknown model provider for: {model_name}. "
-        "Use 'deepseek/...' or 'openai/...' prefix."
-    )
 
 
 def write_system_prompts(
@@ -875,23 +622,6 @@ def _format_percent(value: Any) -> str:
     if value is None:
         return "   n/a"
     return f"{float(value):6.1f}%"
-
-
-def make_messages_with_hint(
-    inputs: dict[str, Any],
-    hint: str,
-    full_system: str,
-) -> list[Any]:
-    """Like the make_messages closure but appends an enrichment hint to the user turn."""
-    user_content = (
-        f"Contract title:\n{inputs['contract_title']}\n\n"
-        f"Contract text:\n{inputs['contract_text']}\n\n"
-        f"Category:\n{inputs['category']}\n\n"
-        f"Category description:\n{inputs['category_description']}\n\n"
-        f"Answer format:\n{inputs['answer_format']}"
-        f"\n\nKey terms to look for: {hint}"
-    )
-    return [SystemMessage(content=full_system), HumanMessage(content=user_content)]
 
 
 _VARIANT_CTX_LABELS: dict[str, str] = {
@@ -1092,7 +822,6 @@ def print_variant_table(df: pd.DataFrame) -> None:
     col_variant = 26
     col_f1 = 10
     col_correct = 13
-    col_pred = 28
 
     header = (
         f"{'Variant':<{col_variant}} | {'Token F1':^{col_f1}} | "
@@ -1109,7 +838,7 @@ def print_variant_table(df: pd.DataFrame) -> None:
         f1_str = f"{float(row.token_f1):.2f}"
         correct_str = str(bool(row.correct_at_0_5))
         print(
-            f"{str(row.variant_name):<{col_variant}} | {f1_str:^{col_f1}} | "
+            f"{row.variant_name!s:<{col_variant}} | {f1_str:^{col_f1}} | "
             f"{correct_str:^{col_correct}} | {pred_preview}"
         )
 
@@ -1162,6 +891,9 @@ def run_full_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         dry_run=args.dry_run,
         prompt_overrides=prompt_overrides,
     )
+    if getattr(args, "question_index", None) is not None:
+        agents = {k: v for k, v in agents.items() if k == args.question_index}
+        eval_rows = eval_rows[eval_rows["question_index"] == args.question_index].copy()
     devset = build_devset(contract_lookup, eval_rows)
     paths = output_paths(args.output_dir, args.model_id, args.html_output)
     jsonl_results_path = paths["model_dir"] / RESULT_JSONL_NAME
@@ -1335,26 +1067,8 @@ def run_all_context_modes(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sample-size", type=int, default=50)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--temperature", type=float, default=0)
-    parser.add_argument("--max-tokens", type=int, default=64000)
-    parser.add_argument(
-        "--num-threads",
-        type=int,
-        default=4,
-        help="max_concurrency passed to chain.batch (parallel example processing).",
-    )
-    parser.add_argument(
-        "--model-id",
-        default=None,
-        help=(
-            "Stable identifier for this model/config run. Defaults to 'v2' "
-            "for this LangChain evaluator. With --all-context-modes, this is "
-            "used as the model-id prefix."
-        ),
-    )
+    add_common_eval_args(parser, default_model=DEFAULT_MODEL, default_max_tokens=64000)
+    add_rag_context_args(parser, context_modes=list(FULL_EVAL_CONTEXT_MODES))
     parser.add_argument(
         "--all-context-modes",
         action="store_true",
@@ -1362,27 +1076,6 @@ def parse_args() -> argparse.Namespace:
             "Run the full evaluation set for raw, rag-dense, rag-hybrid, "
             "rag-hierarchical-bm25, and rag-hierarchical-dense, then print a "
             "comparison table."
-        ),
-    )
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
-    parser.add_argument(
-        "--html-output",
-        type=Path,
-        default=None,
-        help=(
-            "Optional explicit HTML output path. Defaults to "
-            "dashboards/evaluation_MODEL_ID.html for cross-comparability "
-            "with dspy_eval_v1.py output. Bare relative filenames are "
-            "written under dashboards/."
-        ),
-    )
-    parser.add_argument(
-        "--prompts-file",
-        type=Path,
-        default=None,
-        help=(
-            "Optional Python prompt module defining CATEGORY_SYSTEM_PROMPTS. "
-            "Category prompts override the composed default system prompt."
         ),
     )
     parser.add_argument(
@@ -1402,14 +1095,6 @@ def parse_args() -> argparse.Namespace:
         help=(
             "When --prompt-harness-dir is set and --eval-split is omitted, use "
             "splits.json:holdout_eval from the harness directory. Default: true."
-        ),
-    )
-    parser.add_argument(
-        "--eval-split",
-        default=None,
-        help=(
-            "Optional split selector in PATH:SPLIT_NAME format. The split file "
-            "must contain row ids like document_row_id:question_index."
         ),
     )
     parser.add_argument(
@@ -1435,7 +1120,6 @@ def parse_args() -> argparse.Namespace:
             "CSV and write incremental progress after each question. Default: true."
         ),
     )
-    parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--smoke-test",
         action="store_true",
@@ -1461,25 +1145,16 @@ def parse_args() -> argparse.Namespace:
         help="Whether to use the raw CUAD question or an enriched retrieval query.",
     )
     parser.add_argument(
-        "--context-mode",
-        choices=FULL_EVAL_CONTEXT_MODES,
-        default="raw",
-        help="What contract context to pass to the LLM.",
-    )
-    parser.add_argument(
         "--compare-variants",
         action="store_true",
         help="Run all 10 (question_mode × context_mode) combinations; overrides --question-mode and --context-mode.",
     )
-    parser.add_argument("--top-k", type=int, default=RAG_DEFAULT_TOP_K)
     parser.add_argument(
         "--query-enrichment-provider",
         choices=("auto", "llm", "offline"),
         default="auto",
     )
     parser.add_argument("--query-enrichment-model", default="deepseek-chat")
-    parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
-    parser.add_argument("--chunking-version", default=DEFAULT_CHUNKING_VERSION)
     parser.add_argument("--hierarchical-leaf-k", type=int, default=50)
     parser.add_argument("--hierarchical-top-sections", type=int, default=5)
     return parser.parse_args()

@@ -10,3 +10,6 @@ frontend/prompt_review_*.html
 frontend/rag_pipeline_eval.html
 *.egg-info/
 .dspy_cache/
+opensrc/*/
+!opensrc/sources.json
+.claude/scheduled_tasks.lock
