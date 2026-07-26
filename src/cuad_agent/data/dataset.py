@@ -69,16 +69,18 @@ def make_contracts_df(records: list[Any]) -> pd.DataFrame:
     df.insert(0, "document_row_id", range(len(df)))
     if "title" in df.columns:
         df.insert(1, "document_id", df["title"])
-    # 
+    #
     if "paragraphs" not in df.columns:
         return df
-    # 
+    #
     df["paragraphs_len"] = df["paragraphs"].apply(
         lambda paragraphs: len(paragraphs) if isinstance(paragraphs, list) else 0
     )
     first_paragraph = df["paragraphs"].apply(
         lambda paragraphs: paragraphs[0]
-        if isinstance(paragraphs, list) and paragraphs and isinstance(paragraphs[0], dict)
+        if isinstance(paragraphs, list)
+        and paragraphs
+        and isinstance(paragraphs[0], dict)
         else {}
     )
     paragraph_fields = pd.json_normalize(first_paragraph).add_prefix("paragraphs.")
@@ -94,7 +96,7 @@ def make_contracts_df(records: list[Any]) -> pd.DataFrame:
 def make_paragraphs_df(contracts: pd.DataFrame) -> pd.DataFrame:
     if "paragraphs" not in contracts.columns:
         return pd.DataFrame()
-    # 
+    #
     paragraph_rows: list[dict[str, Any]] = []
     for _, row in contracts.iterrows():
         paragraphs = row["paragraphs"]
@@ -118,7 +120,7 @@ def make_paragraphs_df(contracts: pd.DataFrame) -> pd.DataFrame:
 def make_questions_df(paragraphs: pd.DataFrame) -> pd.DataFrame:
     if "qas" not in paragraphs.columns:
         return pd.DataFrame()
-    # 
+    #
     question_rows: list[dict[str, Any]] = []
     for _, row in paragraphs.iterrows():
         qas = row["qas"]
@@ -137,7 +139,7 @@ def make_questions_df(paragraphs: pd.DataFrame) -> pd.DataFrame:
                     **question,
                 }
             )
-    # 
+    #
     questions = pd.DataFrame(question_rows)
     if "answers" in questions.columns:
         questions["answers_len"] = questions["answers"].apply(
@@ -166,9 +168,9 @@ def load_category_descriptions() -> pd.DataFrame:
     categories["category"] = categories["category_source"].apply(
         lambda value: strip_prefix(value, "Category:")
     )
-    categories["category_description"] = categories["category_description_source"].apply(
-        lambda value: strip_prefix(value, "Description:")
-    )
+    categories["category_description"] = categories[
+        "category_description_source"
+    ].apply(lambda value: strip_prefix(value, "Description:"))
     categories["answer_format"] = categories["answer_format_source"].apply(
         lambda value: strip_prefix(value, "Answer Format:")
     )
@@ -204,7 +206,9 @@ def validate_question_category_order(
     ordered_questions = questions.sort_values(
         ["document_row_id", "paragraph_index", "question_index"]
     )
-    question_sequences = ordered_questions.groupby("document_row_id")["question"].agg(tuple)
+    question_sequences = ordered_questions.groupby("document_row_id")["question"].agg(
+        tuple
+    )
     if question_sequences.nunique() != 1:
         raise ValueError("Question order is not identical for every document")
 
@@ -212,7 +216,9 @@ def validate_question_category_order(
         normalize_category(extract_question_category(question))
         for question in question_sequences.iloc[0]
     ]
-    category_names = [normalize_category(category) for category in categories["category"]]
+    category_names = [
+        normalize_category(category) for category in categories["category"]
+    ]
     mismatches = [
         (index, question_category, category_name)
         for index, (question_category, category_name) in enumerate(
@@ -222,8 +228,7 @@ def validate_question_category_order(
     ]
     if mismatches:
         raise ValueError(
-            "Question order does not match category_descriptions.csv: "
-            f"{mismatches[:5]}"
+            f"Question order does not match category_descriptions.csv: {mismatches[:5]}"
         )
 
 
@@ -245,13 +250,13 @@ def load_datasets() -> dict[str, pd.DataFrame]:
     if path is None:
         names = ", ".join((primary, *aliases))
         raise FileNotFoundError(f"Missing file for {datasource}: none of {names} found")
-    # 
+    #
     records = get_records(load_json(path))
     contracts = make_contracts_df(records)
     paragraphs = make_paragraphs_df(contracts)
     questions = make_questions_df(paragraphs)
     questions = join_category_descriptions(questions)
-    # 
+    #
     for table_name, table in {
         "contracts": contracts,
         "paragraphs": paragraphs,
@@ -260,7 +265,7 @@ def load_datasets() -> dict[str, pd.DataFrame]:
         table.attrs["datasource"] = datasource
         table.attrs["path"] = path
         table.attrs["table_name"] = table_name
-    # 
+    #
     return {
         "contracts": contracts,
         "paragraphs": paragraphs,
@@ -276,7 +281,7 @@ def load_datasource_tables() -> list[pd.DataFrame]:
 def summarize_contracts(table: pd.DataFrame) -> dict[str, int]:
     summary = table.count().astype(int).to_dict()
     paragraphs = make_paragraphs_df(table)
-    # 
+    #
     if not paragraphs.empty:
         paragraph_counts = paragraphs.count().astype(int).to_dict()
         summary.update(
@@ -286,7 +291,7 @@ def summarize_contracts(table: pd.DataFrame) -> dict[str, int]:
                 if key not in {"title", "paragraph_index"}
             }
         )
-    # 
+    #
     summary["paragraphs_len_sum"] = int(table.get("paragraphs_len", pd.Series()).sum())
     summary["overall_record_count"] = len(table)
     return summary
@@ -300,12 +305,7 @@ def summarize_questions(table: pd.DataFrame) -> dict[str, int]:
 
 def ordered_columns(rows: list[dict[str, Any]]) -> list[str]:
     metric_columns = sorted(
-        {
-            column
-            for row in rows
-            for column in row
-            if column != "datasource"
-        }
+        {column for row in rows for column in row if column != "datasource"}
     )
     trailing_columns = ["paragraphs_len_sum", "overall_record_count"]
     return [
@@ -345,12 +345,12 @@ def run_adhoc_examples() -> None:
 
     datasets = load_datasets()
     categories = load_category_descriptions()
-    questions = datasets['questions']
+    questions = datasets["questions"]
 
-    question_counts = questions.groupby('document_id')['question'].size()
+    question_counts = questions.groupby("document_id")["question"].size()
     question_sequences = (
-        questions.sort_values(['document_row_id', 'paragraph_index', 'question_index'])
-        .groupby('document_row_id')['question']
+        questions.sort_values(["document_row_id", "paragraph_index", "question_index"])
+        .groupby("document_row_id")["question"]
         .agg(tuple)
     )
     print(f"category_descriptions rows: {len(categories)}")
@@ -363,37 +363,36 @@ def run_adhoc_examples() -> None:
     print(
         questions[
             [
-                'question_index',
-                'category',
-                'category_description',
-                'answer_format',
-                'category_group',
-                'question',
+                "question_index",
+                "category",
+                "category_description",
+                "answer_format",
+                "category_group",
+                "question",
             ]
         ]
-        .drop_duplicates('question_index')
-        .sort_values('question_index')
+        .drop_duplicates("question_index")
+        .sort_values("question_index")
         .to_string(index=False)
     )
 
-    datasets['contracts']['context'].loc[0]
-    datasets['paragraphs']
+    datasets["contracts"]["context"].loc[0]
+    datasets["paragraphs"]
     questions
 
     questions.head()
-    questions.loc[0,'answers']
+    questions.loc[0, "answers"]
 
-    questions['document_id'].value_counts()
-    questions['question'].value_counts()
-
+    questions["document_id"].value_counts()
+    questions["question"].value_counts()
 
     if os.environ.get("EXPLORE_PRINT_ANSWERS"):
-        query_df = questions.query('is_impossible==False')
-        for i in query_df.to_dict(orient='records'):
-            print('#'*20)
-            print(i.get('question'))
-            print('#'*10+'ANSWER')
-            print(i.get('answers'))
+        query_df = questions.query("is_impossible==False")
+        for i in query_df.to_dict(orient="records"):
+            print("#" * 20)
+            print(i.get("question"))
+            print("#" * 10 + "ANSWER")
+            print(i.get("answers"))
 
 
 if __name__ == "__main__":

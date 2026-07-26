@@ -319,20 +319,24 @@ def is_sentence_end_boundary(contract_text: str, end: int) -> bool:
 
 def is_complete_sentence_match(answer: str, contract_text: str) -> bool:
     for start, end in exact_match_spans(answer, contract_text):
-        if is_sentence_start_boundary(contract_text, start) and is_sentence_end_boundary(
-            contract_text, end
-        ):
+        if is_sentence_start_boundary(
+            contract_text, start
+        ) and is_sentence_end_boundary(contract_text, end):
             return True
     return False
 
 
-def derive_answer_format_profiles(results: pd.DataFrame) -> dict[str, AnswerFormatProfile]:
+def derive_answer_format_profiles(
+    results: pd.DataFrame,
+) -> dict[str, AnswerFormatProfile]:
     contract_lookup = load_contract_text_lookup()
     profiles: dict[str, AnswerFormatProfile] = {}
 
     for category, rows in results.groupby("category", sort=True):
         answer_formats = rows["answer_format"].dropna()
-        csv_answer_format = str(answer_formats.iloc[0]) if not answer_formats.empty else ""
+        csv_answer_format = (
+            str(answer_formats.iloc[0]) if not answer_formats.empty else ""
+        )
         non_empty_answers: list[str] = []
         row_answer_counts: list[int] = []
         allows_no_answer = False
@@ -365,8 +369,13 @@ def derive_answer_format_profiles(results: pd.DataFrame) -> dict[str, AnswerForm
                             complete_sentence_matches += 1
 
         normalized_answers = {answer.strip().lower() for answer in non_empty_answers}
-        yes_no_label_only = bool(non_empty_answers) and normalized_answers <= {"yes", "no"}
-        has_label_answers = any(answer.lower() in {"yes", "no"} for answer in non_empty_answers)
+        yes_no_label_only = bool(non_empty_answers) and normalized_answers <= {
+            "yes",
+            "no",
+        }
+        has_label_answers = any(
+            answer.lower() in {"yes", "no"} for answer in non_empty_answers
+        )
         has_non_label_answers = any(
             answer.lower() not in {"yes", "no"} for answer in non_empty_answers
         )
@@ -445,9 +454,13 @@ def answer_format_guidance(profile: AnswerFormatProfile) -> list[str]:
                 "The expected span is usually a complete sentence or clause; include the full sentence punctuation when present."
             )
         elif profile.typical_span_shape == "multi_sentence":
-            guidance.append("The expected span may require multiple consecutive sentences.")
+            guidance.append(
+                "The expected span may require multiple consecutive sentences."
+            )
         elif profile.typical_span_shape == "multiple_spans":
-            guidance.append("Multiple golden spans occur; return each span on a separate line.")
+            guidance.append(
+                "Multiple golden spans occur; return each span on a separate line."
+            )
         if profile.allows_no_answer:
             guidance.append("Return NO_ANSWER only when no supporting span exists.")
         return guidance
@@ -535,7 +548,9 @@ def metadata_for_category(results: pd.DataFrame, category: str) -> dict[str, str
     return {
         "category": category,
         "category_description": str(row.get("category_description", "")),
-        "answer_format": "" if pd.isna(row.get("answer_format", "")) else str(row.get("answer_format", "")),
+        "answer_format": ""
+        if pd.isna(row.get("answer_format", ""))
+        else str(row.get("answer_format", "")),
         "question": str(row.get("question", "")),
         "question_index": str(int(row.get("question_index", 0))),
     }
@@ -671,10 +686,15 @@ def evaluate_patch(request: PromptReviewRequest) -> PromptReview:
     likely_regressions: list[str] = []
 
     has_exact_span_rule = "exact" in patch_text.lower() or "span" in patch_text.lower()
-    has_yes_no_mention = "yes or no" in patch_text.lower() or "yes/no" in patch_text.lower()
+    has_yes_no_mention = (
+        "yes or no" in patch_text.lower() or "yes/no" in patch_text.lower()
+    )
     prompt_growth = len(patch_text) - len(request.current_category_overlay)
 
-    if request.answer_format_profile.requires_verbatim_contract_span and not has_exact_span_rule:
+    if (
+        request.answer_format_profile.requires_verbatim_contract_span
+        and not has_exact_span_rule
+    ):
         requested_changes.append("Add explicit exact-span extraction guidance.")
     if (
         request.answer_format_profile.requires_verbatim_contract_span
@@ -685,12 +705,18 @@ def evaluate_patch(request: PromptReviewRequest) -> PromptReview:
             "Clarify that CSV Yes/No categories still require spans when gold answers are spans."
         )
     if request.answer_format_profile.yes_no_label_only and not has_yes_no_mention:
-        requested_changes.append("Clarify that this category is label-only because gold answers are Yes/No.")
+        requested_changes.append(
+            "Clarify that this category is label-only because gold answers are Yes/No."
+        )
     if prompt_growth > 1800:
-        requested_changes.append("Reduce prompt length and keep only category-specific rules.")
+        requested_changes.append(
+            "Reduce prompt length and keep only category-specific rules."
+        )
         likely_regressions.append("Prompt bloat may dilute the extraction task.")
 
-    evaluator_modes = Counter(example.failure_mode for example in request.evaluator_examples)
+    evaluator_modes = Counter(
+        example.failure_mode for example in request.evaluator_examples
+    )
     if evaluator_modes.get("false_positive_span", 0):
         likely_regressions.append("False positives remain a risk for related clauses.")
 
@@ -878,7 +904,9 @@ def generate_patch_with_agent(
     result = agent.run_sync(format_generator_prompt(request))
     patch = result.output
     if not isinstance(patch, PromptPatch):
-        raise TypeError(f"Generator agent returned {type(patch)!r}, expected PromptPatch")
+        raise TypeError(
+            f"Generator agent returned {type(patch)!r}, expected PromptPatch"
+        )
     if patch.category != request.category:
         patch.category = request.category
     if not patch.prompt_diff_summary:
@@ -903,7 +931,9 @@ def evaluate_patch_with_agent(
     result = agent.run_sync(format_evaluator_prompt(request))
     review = result.output
     if not isinstance(review, PromptReview):
-        raise TypeError(f"Evaluator agent returned {type(review)!r}, expected PromptReview")
+        raise TypeError(
+            f"Evaluator agent returned {type(review)!r}, expected PromptReview"
+        )
     return review
 
 
@@ -1099,7 +1129,9 @@ def prompt_change_insights(
 ) -> list[str]:
     if current_prompt == candidate_prompt:
         if decision == "no_failures":
-            return ["Prompt unchanged because no incorrect examples were found for this question."]
+            return [
+                "Prompt unchanged because no incorrect examples were found for this question."
+            ]
         return ["Prompt unchanged; no generated candidate prompt was available."]
 
     insights: list[str] = []
@@ -1118,7 +1150,9 @@ def prompt_change_insights(
         )
         insights.extend(final_review.requested_changes[:3])
     elif decision == "skipped_existing":
-        insights.append("Loaded from category_status.jsonl; optimization loop was skipped in this run.")
+        insights.append(
+            "Loaded from category_status.jsonl; optimization loop was skipped in this run."
+        )
     return list(dict.fromkeys(insights))
 
 
@@ -1142,9 +1176,9 @@ def build_dashboard_record(
     holdout_examples: list[FailureExample] | None = None,
 ) -> DashboardCategoryRecord:
     meta = metadata_for_category(results, category)
-    answer_format_profile = (
-        answer_format_profiles.get(category) or fallback_answer_format_profile(category, meta)
-    )
+    answer_format_profile = answer_format_profiles.get(
+        category
+    ) or fallback_answer_format_profile(category, meta)
     generator_examples = (
         generator_examples
         if generator_examples is not None
@@ -1160,9 +1194,13 @@ def build_dashboard_record(
         if holdout_examples is not None
         else examples_for_split(errors, category, splits["holdout_eval"])
     )
-    diff = final_patch.prompt_diff_summary if final_patch is not None else prompt_diff(
-        current_prompt,
-        candidate_prompt,
+    diff = (
+        final_patch.prompt_diff_summary
+        if final_patch is not None
+        else prompt_diff(
+            current_prompt,
+            candidate_prompt,
+        )
     )
     regression_risks: list[str] = []
     if final_patch is not None:
@@ -1277,8 +1315,8 @@ def process_category(
         f"Question {int(meta['question_index']) + 1}: "
         f"improving system prompt for {category}"
     )
-    current_prompt = (
-        prompt_overrides.get(category) or default_prompt_from_metadata(meta)
+    current_prompt = prompt_overrides.get(category) or default_prompt_from_metadata(
+        meta
     )
 
     if category_error_rows.empty:
@@ -1455,14 +1493,10 @@ def run_harness(args: argparse.Namespace) -> None:
     agent_mode = LLM_MODEL_ID if use_llm else "deterministic offline mode (--dry-run)"
     print(f"Prompt improvement agent mode: {agent_mode}", flush=True)
     generator_agent = (
-        build_deepseek_agent(PromptPatch, GENERATOR_SYSTEM_PROMPT)
-        if use_llm
-        else None
+        build_deepseek_agent(PromptPatch, GENERATOR_SYSTEM_PROMPT) if use_llm else None
     )
     evaluator_agent = (
-        build_deepseek_agent(PromptReview, EVALUATOR_SYSTEM_PROMPT)
-        if use_llm
-        else None
+        build_deepseek_agent(PromptReview, EVALUATOR_SYSTEM_PROMPT) if use_llm else None
     )
 
     splits = create_splits(
@@ -1531,14 +1565,12 @@ def run_harness(args: argparse.Namespace) -> None:
     for category in all_categories:
         if category not in candidate_prompts:
             meta = metadata_for_category(results, str(category))
-            candidate_prompts[category] = (
-                prompt_overrides.get(category)
-                or default_prompt_from_metadata(meta)
-            )
+            candidate_prompts[category] = prompt_overrides.get(
+                category
+            ) or default_prompt_from_metadata(meta)
 
     to_process = [
-        category for category in all_categories
-        if category not in completed_categories
+        category for category in all_categories if category not in completed_categories
     ]
 
     status_lock = threading.Lock()
@@ -1648,8 +1680,7 @@ def run_harness(args: argparse.Namespace) -> None:
                     result = future.result()
                 except Exception as exc:
                     print(
-                        f"  ERROR processing {category}: "
-                        f"{type(exc).__name__}: {exc}",
+                        f"  ERROR processing {category}: {type(exc).__name__}: {exc}",
                         flush=True,
                     )
                     continue
@@ -1660,8 +1691,8 @@ def run_harness(args: argparse.Namespace) -> None:
         if category in dashboard_by_category:
             continue
         meta = metadata_for_category(results, category)
-        current_prompt = (
-            prompt_overrides.get(category) or default_prompt_from_metadata(meta)
+        current_prompt = prompt_overrides.get(category) or default_prompt_from_metadata(
+            meta
         )
         prior_record = prior_status.get(category, {})
         candidate_prompt = candidate_prompts.get(category, current_prompt)
@@ -1673,7 +1704,9 @@ def run_harness(args: argparse.Namespace) -> None:
             decision = str(prior_record.get("decision") or "skipped_existing")
             main_failure_mode = str(
                 prior_record.get("main_failure_mode")
-                or Counter(str(mode) for mode in category_error_rows["failure_mode"]).most_common(1)[0][0]
+                or Counter(
+                    str(mode) for mode in category_error_rows["failure_mode"]
+                ).most_common(1)[0][0]
             )
         loop_count = int(prior_record.get("loop_count") or 0)
         dashboard_by_category[category] = build_dashboard_record(

@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import json
 import sys
-import textwrap
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -126,7 +124,9 @@ def _sample_variants_df() -> pd.DataFrame:
                 "retrieval_query": "Governing Law ...",
                 "hint_used": "",
                 "predicted_answer": "governed by the laws of the State of Delaware",
-                "gold_answers": json.dumps(["governed by the laws of the State of Delaware"]),
+                "gold_answers": json.dumps(
+                    ["governed by the laws of the State of Delaware"]
+                ),
                 "token_f1": 1.0,
                 "correct_at_0_5": True,
                 "enrichment_terms": "governed by; laws of",
@@ -141,7 +141,9 @@ def _sample_variants_df() -> pd.DataFrame:
                 "retrieval_query": "Governing Law ... governed by; laws of",
                 "hint_used": "governed by; laws of",
                 "predicted_answer": "Delaware",
-                "gold_answers": json.dumps(["governed by the laws of the State of Delaware"]),
+                "gold_answers": json.dumps(
+                    ["governed by the laws of the State of Delaware"]
+                ),
                 "token_f1": 0.25,
                 "correct_at_0_5": False,
                 "enrichment_terms": "governed by; laws of",
@@ -161,7 +163,9 @@ def test_print_variant_table_does_not_crash(capsys: pytest.CaptureFixture) -> No
     assert "Governing Law" in captured.out
 
 
-def test_print_variant_table_empty_df_does_not_crash(capsys: pytest.CaptureFixture) -> None:
+def test_print_variant_table_empty_df_does_not_crash(
+    capsys: pytest.CaptureFixture,
+) -> None:
     print_variant_table(pd.DataFrame())
     captured = capsys.readouterr()
     assert "no variants" in captured.out.lower()

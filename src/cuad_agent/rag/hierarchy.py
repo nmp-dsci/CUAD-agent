@@ -34,7 +34,9 @@ def section_key_for(item: SentenceSpan | RagChunk) -> tuple[str, ...]:
     return ("_unsectioned",)
 
 
-def build_section_index(sentence_spans: list[SentenceSpan]) -> dict[int, list[SectionNode]]:
+def build_section_index(
+    sentence_spans: list[SentenceSpan],
+) -> dict[int, list[SectionNode]]:
     """Group sentence spans into ordered section nodes by document."""
     grouped: dict[int, OrderedDict[tuple[str, ...], list[SentenceSpan]]] = {}
     for span in sentence_spans:
@@ -76,7 +78,9 @@ class HierarchicalRetriever:
         self.section_index = section_index
         self.leaf_k = leaf_k
         self.top_sections = top_sections
-        self._chunk_positions = {chunk.chunk_id: idx for idx, chunk in enumerate(index.chunks)}
+        self._chunk_positions = {
+            chunk.chunk_id: idx for idx, chunk in enumerate(index.chunks)
+        }
 
     def search(
         self,
@@ -138,7 +142,9 @@ class HierarchicalRetriever:
             return [
                 SearchResult(
                     chunk=chunk,
-                    score=self.index.score(query, self._chunk_positions[chunk.chunk_id]),
+                    score=self.index.score(
+                        query, self._chunk_positions[chunk.chunk_id]
+                    ),
                     rank=0,
                 )
                 for chunk in candidate_chunks
@@ -147,8 +153,13 @@ class HierarchicalRetriever:
         if not candidate_chunks:
             return []
 
-        candidate_indices = [self._chunk_positions[chunk.chunk_id] for chunk in candidate_chunks]
-        if self.index.backend == "sentence_transformers" and self.index.model is not None:
+        candidate_indices = [
+            self._chunk_positions[chunk.chunk_id] for chunk in candidate_chunks
+        ]
+        if (
+            self.index.backend == "sentence_transformers"
+            and self.index.model is not None
+        ):
             query_vector = np.asarray(
                 self.index.model.encode([query], normalize_embeddings=True)
             )

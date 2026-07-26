@@ -28,7 +28,9 @@ def detect_line_section(line: str) -> tuple[str | None, str | None] | None:
     return None
 
 
-def build_section_metadata(text: str) -> dict[int, tuple[str | None, str | None, list[str]]]:
+def build_section_metadata(
+    text: str,
+) -> dict[int, tuple[str | None, str | None, list[str]]]:
     """Map line start offsets to the current section metadata."""
     metadata: dict[int, tuple[str | None, str | None, list[str]]] = {}
     current_number: str | None = None

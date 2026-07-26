@@ -98,8 +98,18 @@ def index_cache_path(
     embedding_model: str,
 ) -> Path:
     if method.startswith("bm25_"):
-        return output_dir / "rag_cache" / "sparse" / chunking_version / method / "bm25_index.pkl"
-    return dense_encoding_cache_dir(output_dir, chunking_version, embedding_model) / "dense_index.pkl"
+        return (
+            output_dir
+            / "rag_cache"
+            / "sparse"
+            / chunking_version
+            / method
+            / "bm25_index.pkl"
+        )
+    return (
+        dense_encoding_cache_dir(output_dir, chunking_version, embedding_model)
+        / "dense_index.pkl"
+    )
 
 
 def load_or_build_retriever(
@@ -118,7 +128,9 @@ def load_or_build_retriever(
         if isinstance(cached, SentenceRetriever):
             emit_progress(progress, f"Loaded retriever cache: method={method}")
             return cached, True
-    emit_progress(progress, f"Building retriever: method={method}, chunks={len(chunks)}")
+    emit_progress(
+        progress, f"Building retriever: method={method}, chunks={len(chunks)}"
+    )
     retriever = build_retriever(method, chunks, embedding_model=embedding_model)
     try:
         write_pickle(path, retriever)
@@ -179,7 +191,9 @@ def load_or_build_dense_sentence_encoder(
         pass
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     emit_progress(progress, f"Wrote dense sentence encoding cache: {cache_dir}")
-    encoded_count = int(manifest.get("chunk_count", manifest.get("sentence_count", len(chunks))))
+    encoded_count = int(
+        manifest.get("chunk_count", manifest.get("sentence_count", len(chunks)))
+    )
     info = {
         f"{method}_encoding_cache_hit": False,
         f"{method}_encoded_chunk_count": encoded_count,

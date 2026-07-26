@@ -64,7 +64,10 @@ def _print_comparison(summaries: list[dict[str, Any]], labels: list[str]) -> Non
 
     # Build lookup per summary: category → mean_token_f1
     lookups: list[dict[str, float]] = [
-        {entry["category"]: entry["mean_token_f1"] for entry in s.get("per_category", [])}
+        {
+            entry["category"]: entry["mean_token_f1"]
+            for entry in s.get("per_category", [])
+        }
         for s in summaries
     ]
 
@@ -84,7 +87,9 @@ def _print_run_info(summaries: list[dict[str, Any]], labels: list[str]) -> None:
         context_mode = s.get("context_mode", "raw")
         n = s.get("total_examples", "?")
         dry = " [dry-run]" if s.get("dry_run") else ""
-        print(f"  {label}: model_id={model_id}, model={model}, context={context_mode}, n={n}{dry}")
+        print(
+            f"  {label}: model_id={model_id}, model={model}, context={context_mode}, n={n}{dry}"
+        )
 
 
 def main() -> None:
@@ -111,7 +116,9 @@ def main() -> None:
     summaries = [_load_summary(p) for p in args.paths]
     if args.label:
         if len(args.label) != len(summaries):
-            parser.error(f"--label count ({len(args.label)}) must match path count ({len(summaries)})")
+            parser.error(
+                f"--label count ({len(args.label)}) must match path count ({len(summaries)})"
+            )
         labels = args.label
     else:
         labels = [s.get("model_id", str(p)) for s, p in zip(summaries, args.paths)]

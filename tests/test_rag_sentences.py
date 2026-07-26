@@ -18,7 +18,10 @@ def test_sentence_splitter_preserves_offsets_and_legal_abbreviations() -> None:
 
 
 def test_normalize_sentence_text_keeps_exact_matching_conservative() -> None:
-    assert normalize_sentence_text(" A\u00a0sentence   , with text. ") == "A sentence, with text."
+    assert (
+        normalize_sentence_text(" A\u00a0sentence   , with text. ")
+        == "A sentence, with text."
+    )
 
 
 def test_sentence_splitter_keeps_list_markers_with_sentence_text() -> None:

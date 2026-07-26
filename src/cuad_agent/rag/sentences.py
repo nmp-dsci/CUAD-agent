@@ -27,6 +27,7 @@ LEGAL_ABBREVIATIONS = {
     "dr.",
 }
 
+
 @dataclass(frozen=True)
 class SentenceSpan:
     document_row_id: int
@@ -172,7 +173,9 @@ def _is_heading_line(line: str) -> bool:
     letters = [character for character in stripped if character.isalpha()]
     if not letters:
         return False
-    uppercase_ratio = sum(1 for character in letters if character.isupper()) / len(letters)
+    uppercase_ratio = sum(1 for character in letters if character.isupper()) / len(
+        letters
+    )
     return uppercase_ratio >= 0.65 or stripped.istitle()
 
 
@@ -207,7 +210,6 @@ def heading_blocks(start: int, block: str) -> list[tuple[int, int, str]]:
             continue
 
         remainder_start = line_start
-        remainder = "".join(lines[cursor:])
         trimmed = _trimmed_segment(block, remainder_start - start, len(block))
         if trimmed:
             block_start, block_end, text = trimmed
@@ -220,8 +222,12 @@ def structural_text_blocks(text: str) -> list[tuple[int, int, str]]:
     """Split headings and paragraph breaks before sentence-boundary chunking."""
     blocks: list[tuple[int, int, str]] = []
     for paragraph_start, _, paragraph in paragraph_blocks(text):
-        for heading_start, _, heading_block in heading_blocks(paragraph_start, paragraph):
-            blocks.append((heading_start, heading_start + len(heading_block), heading_block))
+        for heading_start, _, heading_block in heading_blocks(
+            paragraph_start, paragraph
+        ):
+            blocks.append(
+                (heading_start, heading_start + len(heading_block), heading_block)
+            )
     return blocks
 
 
@@ -279,7 +285,9 @@ def build_sentence_spans(
     spans: list[SentenceSpan] = []
     metadata = section_metadata or {}
     for index, (start, end, raw) in enumerate(split_sentence_segments(text)):
-        section_number, section_title, clause_path = metadata.get(start, (None, None, []))
+        section_number, section_title, clause_path = metadata.get(
+            start, (None, None, [])
+        )
         spans.append(
             SentenceSpan(
                 document_row_id=int(document_row_id),

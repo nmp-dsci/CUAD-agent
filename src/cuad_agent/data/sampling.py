@@ -67,14 +67,18 @@ def filter_eval_rows_by_split(
                 rows["document_row_id"], rows["question_index"]
             )
         ]
-    return rows.sort_values(["document_row_id", "question_index"]).reset_index(drop=True)
+    return rows.sort_values(["document_row_id", "question_index"]).reset_index(
+        drop=True
+    )
 
 
 def all_contract_lookup() -> dict[int, dict[str, Any]]:
     contracts = load_datasets()["contracts"]
     return {
         int(key): value
-        for key, value in contracts.set_index("document_row_id").to_dict("index").items()
+        for key, value in contracts.set_index("document_row_id")
+        .to_dict("index")
+        .items()
     }
 
 
@@ -91,7 +95,9 @@ def select_evaluation_set(
     questions = datasets["questions"]
     full_contract_lookup = {
         int(key): value
-        for key, value in contracts.set_index("document_row_id").to_dict("index").items()
+        for key, value in contracts.set_index("document_row_id")
+        .to_dict("index")
+        .items()
     }
 
     if contract_ids:
@@ -138,6 +144,7 @@ def build_eval_sample(
             f"Expected {expected_rows} eval rows, found {selection.eval_rows.shape[0]}"
         )
     return selection.selected_ids, selection.contract_lookup, selection.eval_rows
+
 
 __all__ = [
     "EVAL_QUESTION_INDICES",

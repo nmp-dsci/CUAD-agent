@@ -46,7 +46,9 @@ class BM25SentenceIndex:
         self.b = b
         self.doc_tokens = [tokenize(chunk.normalized_text) for chunk in chunks]
         self.doc_lengths = [len(tokens) for tokens in self.doc_tokens]
-        self.avgdl = sum(self.doc_lengths) / len(self.doc_lengths) if self.doc_lengths else 0.0
+        self.avgdl = (
+            sum(self.doc_lengths) / len(self.doc_lengths) if self.doc_lengths else 0.0
+        )
         self.term_freqs = [Counter(tokens) for tokens in self.doc_tokens]
         self.doc_freqs: dict[str, int] = defaultdict(int)
         for tokens in self.doc_tokens:
@@ -67,11 +69,15 @@ class BM25SentenceIndex:
                 continue
             doc_freq = self.doc_freqs.get(token, 0)
             idf = math.log(1 + (total_docs - doc_freq + 0.5) / (doc_freq + 0.5))
-            denominator = freq + self.k1 * (1 - self.b + self.b * doc_len / (self.avgdl or 1))
+            denominator = freq + self.k1 * (
+                1 - self.b + self.b * doc_len / (self.avgdl or 1)
+            )
             score += idf * (freq * (self.k1 + 1)) / denominator
         return float(score)
 
-    def search(self, query: str, *, document_row_id: int, top_k: int) -> list[SearchResult]:
+    def search(
+        self, query: str, *, document_row_id: int, top_k: int
+    ) -> list[SearchResult]:
         scored = [
             (self.score(query, index), chunk)
             for index, chunk in enumerate(self.chunks)
@@ -146,7 +152,9 @@ class DenseSentenceIndex:
         )
         return manifest
 
-    def search(self, query: str, *, document_row_id: int, top_k: int) -> list[SearchResult]:
+    def search(
+        self, query: str, *, document_row_id: int, top_k: int
+    ) -> list[SearchResult]:
         if not self.chunks:
             return []
         if self.backend == "sentence_transformers" and self.model is not None:
